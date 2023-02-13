@@ -10,7 +10,7 @@ use sokoban::ZeroCopy;
 const BOOK_SIZE: usize = 4096;
 
 type TraderId = u128;
-type Dex = FIFOMarket<TraderId, BOOK_SIZE, BOOK_SIZE, 8192>;
+type Dex = FIFOMarket<TraderId, BOOK_SIZE, BOOK_SIZE, 8193>;
 
 fn setup_market() -> Dex {
     setup_market_with_params(10000, 100, 0)

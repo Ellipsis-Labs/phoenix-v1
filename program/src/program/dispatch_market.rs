@@ -58,13 +58,13 @@ pub fn dispatch_market_mut<'a>(
     } = market_size_params;
     let market = match (bids_size, asks_size, num_seats) {
         (512, 512, 128) => fifo_market_mut!(512, 512, 128, bytes),
-        (512, 512, 1024) => fifo_market_mut!(512, 512, 1024, bytes),
+        (512, 512, 1025) => fifo_market_mut!(512, 512, 1025, bytes),
         (1024, 1024, 128) => fifo_market_mut!(1024, 1024, 128, bytes),
-        (1024, 1024, 2048) => fifo_market_mut!(1024, 1024, 2048, bytes),
+        (1024, 1024, 2049) => fifo_market_mut!(1024, 1024, 2049, bytes),
         (2048, 2048, 128) => fifo_market_mut!(2048, 2048, 128, bytes),
-        (2048, 2048, 4096) => fifo_market_mut!(2048, 2048, 4096, bytes),
+        (2048, 2048, 4097) => fifo_market_mut!(2048, 2048, 4097, bytes),
         (4096, 4096, 128) => fifo_market_mut!(4096, 4096, 128, bytes),
-        (4096, 4096, 8192) => fifo_market_mut!(4096, 4096, 8192, bytes),
+        (4096, 4096, 8193) => fifo_market_mut!(4096, 4096, 8193, bytes),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
@@ -103,13 +103,13 @@ fn dispatch_market<'a>(
         market_size_params.num_seats,
     ) {
         (512, 512, 128) => fifo_market!(512, 512, 128, bytes),
-        (512, 512, 1024) => fifo_market!(512, 512, 1024, bytes),
+        (512, 512, 1025) => fifo_market!(512, 512, 1025, bytes),
         (1024, 1024, 128) => fifo_market!(1024, 1024, 128, bytes),
-        (1024, 1024, 2048) => fifo_market!(1024, 1024, 2048, bytes),
+        (1024, 1024, 2049) => fifo_market!(1024, 1024, 2049, bytes),
         (2048, 2048, 128) => fifo_market!(2048, 2048, 128, bytes),
-        (2048, 2048, 4096) => fifo_market!(2048, 2048, 4096, bytes),
+        (2048, 2048, 4097) => fifo_market!(2048, 2048, 4097, bytes),
         (4096, 4096, 128) => fifo_market!(4096, 4096, 128, bytes),
-        (4096, 4096, 8192) => fifo_market!(4096, 4096, 8192, bytes),
+        (4096, 4096, 8193) => fifo_market!(4096, 4096, 8193, bytes),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
@@ -131,13 +131,13 @@ pub fn get_market_size(market_size_params: &MarketSizeParams) -> Result<usize, P
     } = market_size_params;
     let size = match (bids_size, asks_size, num_seats) {
         (512, 512, 128) => fifo_market_size!(512, 512, 128),
-        (512, 512, 1024) => fifo_market_size!(512, 512, 1024),
+        (512, 512, 1025) => fifo_market_size!(512, 512, 1025),
         (1024, 1024, 128) => fifo_market_size!(1024, 1024, 128),
-        (1024, 1024, 2048) => fifo_market_size!(1024, 1024, 2048),
+        (1024, 1024, 2049) => fifo_market_size!(1024, 1024, 2049),
         (2048, 2048, 128) => fifo_market_size!(2048, 2048, 128),
-        (2048, 2048, 4096) => fifo_market_size!(2048, 2048, 4096),
+        (2048, 2048, 4097) => fifo_market_size!(2048, 2048, 4097),
         (4096, 4096, 128) => fifo_market_size!(4096, 4096, 128),
-        (4096, 4096, 8192) => fifo_market_size!(4096, 4096, 8192),
+        (4096, 4096, 8193) => fifo_market_size!(4096, 4096, 8193),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
@@ -151,13 +151,13 @@ fn test_market_size() {
     use solana_program::rent::Rent;
     let valid_configs = [
         (512, 512, 128),
-        (512, 512, 1024),
+        (512, 512, 1025),
         (1024, 1024, 128),
-        (1024, 1024, 2048),
+        (1024, 1024, 2049),
         (2048, 2048, 128),
-        (2048, 2048, 4096),
+        (2048, 2048, 4097),
         (4096, 4096, 128),
-        (4096, 4096, 8192),
+        (4096, 4096, 8193),
     ];
     for (bids_size, asks_size, num_seats) in valid_configs.into_iter() {
         let market_size_params = MarketSizeParams {
