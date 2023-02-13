@@ -38,4 +38,3 @@ solana-sdk = { workspace = true }
 tokio = { workspace = true }
 ellipsis-client = { workspace = true }
 phoenix-sdk = { workspace = true }
-phoenix-types = { workspace = true }

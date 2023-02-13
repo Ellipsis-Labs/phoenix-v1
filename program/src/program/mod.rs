@@ -7,6 +7,7 @@ pub mod instruction;
 pub mod instruction_builders;
 pub mod processor;
 pub mod status;
+pub mod system_utils;
 pub mod token_utils;
 pub mod validation;
 

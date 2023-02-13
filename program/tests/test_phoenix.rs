@@ -11,7 +11,7 @@ use phoenix_sdk::sdk_client::Reduce;
 use sokoban::ZeroCopy;
 use solana_program::instruction::AccountMeta;
 use solana_program::instruction::Instruction;
-use solana_program::system_instruction::transfer;
+use solana_program::system_instruction::{self, transfer};
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
 use spl_associated_token_account::get_associated_token_address;
 use std::collections::HashSet;
@@ -264,12 +264,19 @@ async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> Phoenix
     // Request seat for maker (by authority)
     sdk.client
         .sign_send_instructions(
-            vec![create_request_seat_authorized_instruction(
-                &sdk.client.payer.pubkey(),
-                &sdk.client.payer.pubkey(),
-                &sdk.core.active_market_key,
-                &maker.user.pubkey(),
-            )],
+            vec![
+                system_instruction::transfer(
+                    &sdk.client.payer.pubkey(),
+                    &get_seat_address(&sdk.active_market_key, &maker.user.pubkey()).0,
+                    5000,
+                ),
+                create_request_seat_authorized_instruction(
+                    &sdk.client.payer.pubkey(),
+                    &sdk.client.payer.pubkey(),
+                    &sdk.core.active_market_key,
+                    &maker.user.pubkey(),
+                ),
+            ],
             vec![&sdk.client.payer],
         )
         .await
