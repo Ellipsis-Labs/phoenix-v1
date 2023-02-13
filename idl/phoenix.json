@@ -1038,7 +1038,14 @@
           "desc": "Token program"
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "initializeParams",
+          "type": {
+            "defined": "InitializeParams"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 100
@@ -1106,7 +1113,12 @@
           "desc": "The market_authority account must sign to claim authority"
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "successor",
+          "type": "publicKey"
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 102
@@ -1140,7 +1152,14 @@
           "desc": "The market_authority account must sign to claim authority"
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "marketStatus",
+          "type": {
+            "defined": "MarketStatus"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 103
@@ -1179,7 +1198,14 @@
           "isSigner": false
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "approvalStatus",
+          "type": {
+            "defined": "SeatApprovalStatus"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 104
@@ -1380,7 +1406,14 @@
           "desc": "Token program"
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": "CancelUpToParams"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 107
