@@ -30,7 +30,7 @@ pub mod helpers;
 use crate::helpers::*;
 
 const BOOK_SIZE: usize = 4096;
-const NUM_SEATS: usize = 8192;
+const NUM_SEATS: usize = 8193;
 
 pub struct PhoenixTestAccount {
     pub user: Keypair,

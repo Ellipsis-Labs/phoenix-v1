@@ -2517,7 +2517,7 @@ dependencies = [
 [[package]]
 name = "phoenix-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=ee2890c#ee2890c4a3085695a5a0a80a44efae5e1bc4f14b"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=bfa848b#bfa848baa3453930796f26b10582b1e02ccc3f73"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2544,7 +2544,7 @@ dependencies = [
 [[package]]
 name = "phoenix-sdk-core"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=ee2890c#ee2890c4a3085695a5a0a80a44efae5e1bc4f14b"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=bfa848b#bfa848baa3453930796f26b10582b1e02ccc3f73"
 dependencies = [
  "anyhow",
  "borsh 0.9.3",
@@ -2561,7 +2561,7 @@ dependencies = [
 [[package]]
 name = "phoenix-types"
 version = "0.1.9"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-types?rev=db9e6e2#db9e6e22f74f5e087524432195fadcd40911621c"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-types?rev=9dc3547#9dc35478dd80c8dfa6ef49c19067dcd380d1248c"
 dependencies = [
  "borsh 0.9.3",
  "bytemuck",
