@@ -1644,8 +1644,8 @@ async fn test_phoenix_cancel_with_free_funds() {
         .unwrap();
 
     let market_state = sdk.get_market_state().await;
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 
     let order_packet = OrderPacket::new_limit_order(
         Side::Bid,
@@ -1670,7 +1670,7 @@ async fn test_phoenix_cancel_with_free_funds() {
         .unwrap();
 
     let market_state = sdk.get_market_state().await;
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(!market_state.orderbook.bids.is_empty());
     assert!(
         market_state.traders[&trader].quote_lots_free
@@ -1717,8 +1717,8 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 
     sdk.client
         .sign_send_instructions(
@@ -1744,7 +1744,7 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(!market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(
         market_state.traders[&trader].quote_lots_free
             == quote_lots.as_u64()
@@ -1773,8 +1773,8 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 }
 
 #[tokio::test]
