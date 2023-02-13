@@ -2328,7 +2328,7 @@
     {
       "code": 1,
       "name": "InvalidMarketAuthority",
-      "msg": "Invalid exchange authority error"
+      "msg": "Invalid market authority error"
     },
     {
       "code": 2,

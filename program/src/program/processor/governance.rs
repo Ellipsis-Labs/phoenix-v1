@@ -84,7 +84,7 @@ pub(crate) fn process_claim_authority<'a, 'info>(
 }
 
 /// The authority can be changed to a successor, but the successor must go into
-/// explicitly claim the authority from the previous exchange authority
+/// explicitly claim the authority from the previous market authority
 pub(crate) fn process_name_successor<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,
