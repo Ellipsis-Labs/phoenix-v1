@@ -1,8 +1,8 @@
 # phoenix
 
-On-chain orderbook that operates without a crank
+On-chain orderbook that operates without a crank.
 
-### Build
+### Building and Testing
 
 To build the contract, run:
 
@@ -11,11 +11,13 @@ cd program
 ./build.sh
 ```
 
-### Testing
-
 To test the contract, run:
 
 ```
-cd programs
+cd program
 ./test.sh
 ```
+
+### Licensing
+
+The primary license for Phoenix V1 is the Business Source License 1.1 (`BUSL-1.1`), see [`LICENSE`](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/LICENSE).
