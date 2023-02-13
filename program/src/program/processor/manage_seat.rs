@@ -1,17 +1,18 @@
 use crate::program::{
     dispatch_market::load_with_dispatch_mut, error::assert_with_msg, get_discriminant,
-    loaders::get_seat_address, status::SeatApprovalStatus, AuthorizedSeatRequestContext,
-    MarketHeader, ModifySeatContext, PhoenixMarketContext, RequestSeatContext, Seat,
+    loaders::get_seat_address, status::SeatApprovalStatus, system_utils::create_account,
+    AuthorizedSeatRequestContext, MarketHeader, ModifySeatContext, PhoenixMarketContext,
+    RequestSeatContext, Seat,
 };
 use borsh::BorshDeserialize;
 use sokoban::node_allocator::ZeroCopy;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, program::invoke_signed,
-    program_error::ProgramError, pubkey::Pubkey, rent::Rent, system_instruction, sysvar::Sysvar,
+    account_info::AccountInfo, entrypoint::ProgramResult, program_error::ProgramError,
+    pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
 };
 use std::mem::size_of;
 
-/// This instruction is used to request a seat on the market by the market authority for a trader
+/// This instruction is used to request a seat on the market by the exchange authority for a trader
 pub(crate) fn process_request_seat_authorized<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,
@@ -72,16 +73,20 @@ fn _create_seat<'a, 'info>(
         "Invalid seat address",
     )?;
     let space = size_of::<Seat>();
-    invoke_signed(
-        &system_instruction::create_account(
-            payer.key,
-            seat.key,
-            Rent::get()?.minimum_balance(space),
-            space.try_into().unwrap(),
-            &crate::ID,
-        ),
-        &[payer.clone(), seat.clone(), system_program.clone()],
-        &[&[b"seat", market_key.as_ref(), trader.as_ref(), &[bump]]],
+    let seeds = vec![
+        b"seat".to_vec(),
+        market_key.as_ref().to_vec(),
+        trader.as_ref().to_vec(),
+        vec![bump],
+    ];
+    create_account(
+        payer,
+        seat,
+        system_program,
+        &crate::id(),
+        &Rent::get()?,
+        space as u64,
+        seeds,
     )?;
     let mut seat_bytes = seat.try_borrow_mut_data()?;
     *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? = Seat {
@@ -94,7 +99,7 @@ fn _create_seat<'a, 'info>(
 }
 
 /// This instruction is used to modify a seat on the market
-/// The seat can be modified only by the market authority
+/// The seat can be modified only by the exchange authority
 pub(crate) fn process_change_seat_status<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,

@@ -23,7 +23,6 @@ rand = "0.7.3"
 ellipsis-client = "=0.1.10"
 tokio = { version = "1.8.4", features = ["full"] }
 num_enum = "^0.5.1"
-phoenix-types = { git = "https://github.com/Ellipsis-Labs/phoenix-types", rev = "bf6ecf4" }
 phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "6a2e629" }
 itertools = "0.10.5"
 thiserror = "^1.0.24"

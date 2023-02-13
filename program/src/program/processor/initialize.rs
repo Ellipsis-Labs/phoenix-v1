@@ -3,6 +3,7 @@ use crate::{
         dispatch_market::load_with_dispatch_init,
         error::{assert_with_msg, PhoenixError},
         loaders::{get_vault_address, InitializeMarketContext},
+        system_utils::create_account,
         MarketHeader, MarketSizeParams, PhoenixMarketContext, TokenParams,
     },
     quantities::{
@@ -12,15 +13,8 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
-    account_info::AccountInfo,
-    entrypoint::ProgramResult,
-    program::{invoke, invoke_signed},
-    program_error::ProgramError,
-    program_pack::Pack,
-    pubkey::Pubkey,
-    rent::Rent,
-    system_instruction,
-    sysvar::Sysvar,
+    account_info::AccountInfo, entrypoint::ProgramResult, program::invoke,
+    program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, rent::Rent, sysvar::Sysvar,
 };
 use std::{mem::size_of, ops::DerefMut};
 
@@ -167,25 +161,20 @@ pub(crate) fn process_initialize_market<'a, 'info>(
             ),
         )?;
         let space = spl_token::state::Account::LEN;
-        invoke_signed(
-            &system_instruction::create_account(
-                market_creator.key,
-                token_account.key,
-                rent.minimum_balance(space),
-                space.try_into().unwrap(),
-                &spl_token::id(),
-            ),
-            &[
-                market_creator.as_ref().clone(),
-                token_account.clone(),
-                system_program.as_ref().clone(),
-            ],
-            &[&[
-                b"vault",
-                market_info.key.as_ref(),
-                mint.key.as_ref(),
-                &[bump],
-            ]],
+        let seeds = vec![
+            b"vault".to_vec(),
+            market_info.key.as_ref().to_vec(),
+            mint.key.as_ref().to_vec(),
+            vec![bump],
+        ];
+        create_account(
+            market_creator.as_ref(),
+            token_account,
+            system_program.as_ref(),
+            &spl_token::id(),
+            &rent,
+            space as u64,
+            seeds,
         )?;
         invoke(
             &spl_token::instruction::initialize_account3(
