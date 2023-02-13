@@ -1910,6 +1910,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lib-sokoban"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce6295db13f26aaa8bb4fb38e0c9ff50253814aa490eef7b4d6aa106ba6fc843"
+dependencies = [
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2499,7 +2511,7 @@ dependencies = [
  "ellipsis-client",
  "ellipsis-macros 0.1.1",
  "itertools",
- "lib-sokoban",
+ "lib-sokoban 0.3.0",
  "num_enum",
  "phoenix-sdk",
  "rand 0.7.3",
@@ -2566,7 +2578,7 @@ dependencies = [
  "borsh 0.9.3",
  "bytemuck",
  "ellipsis-macros 0.1.2",
- "lib-sokoban",
+ "lib-sokoban 0.2.6",
  "num_enum",
  "serde",
  "shank",
