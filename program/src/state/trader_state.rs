@@ -8,6 +8,7 @@ pub struct TraderState {
     pub quote_lots_free: QuoteLots,
     pub base_lots_locked: BaseLots,
     pub base_lots_free: BaseLots,
+    _padding: [u64; 8],
 }
 
 impl TraderState {
