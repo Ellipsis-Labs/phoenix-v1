@@ -1,8 +1,7 @@
 use crate::program::{
-    dispatch_market::load_with_dispatch_mut, error::assert_with_msg, get_discriminant,
-    loaders::get_seat_address, status::SeatApprovalStatus, system_utils::create_account,
-    AuthorizedSeatRequestContext, MarketHeader, ModifySeatContext, PhoenixMarketContext,
-    RequestSeatContext, Seat,
+    dispatch_market::load_with_dispatch_mut, error::assert_with_msg, loaders::get_seat_address,
+    status::SeatApprovalStatus, system_utils::create_account, AuthorizedSeatRequestContext,
+    MarketHeader, ModifySeatContext, PhoenixMarketContext, RequestSeatContext, Seat,
 };
 use borsh::BorshDeserialize;
 use sokoban::node_allocator::ZeroCopy;
@@ -12,7 +11,7 @@ use solana_program::{
 };
 use std::mem::size_of;
 
-/// This instruction is used to request a seat on the market by the exchange authority for a trader
+/// This instruction is used to request a seat on the market by the market authority for a trader
 pub(crate) fn process_request_seat_authorized<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,
@@ -89,17 +88,13 @@ fn _create_seat<'a, 'info>(
         seeds,
     )?;
     let mut seat_bytes = seat.try_borrow_mut_data()?;
-    *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? = Seat {
-        discriminant: get_discriminant::<Seat>()?,
-        market: *market_key,
-        trader: *trader,
-        approval_status: SeatApprovalStatus::NotApproved as u64,
-    };
+    *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? =
+        Seat::new_init(*market_key, *trader)?;
     Ok(())
 }
 
 /// This instruction is used to modify a seat on the market
-/// The seat can be modified only by the exchange authority
+/// The seat can be modified only by the market authority
 pub(crate) fn process_change_seat_status<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,

@@ -10,7 +10,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -22,7 +22,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     SwapWithFreeFunds = 1,
 
@@ -30,7 +30,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     #[account(5, writable, name = "base_account", desc = "Trader base token account")]
     #[account(6, writable, name = "quote_account", desc = "Trader quote token account")]
@@ -43,7 +43,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     PlaceLimitOrderWithFreeFunds = 3,
 
@@ -51,7 +51,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -71,7 +71,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -83,14 +83,14 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     CancelAllOrdersWithFreeFunds = 7,
 
     /// Cancel all orders more aggressive than a specified price
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -103,14 +103,14 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     CancelUpToWithFreeFunds = 9,
 
     /// Cancel multiple orders by ID 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -122,13 +122,13 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     CancelMultipleOrdersByIdWithFreeFunds = 11,
 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, writable, name = "base_account", desc = "Trader base token account")]
     #[account(5, writable, name = "quote_account", desc = "Trader quote token account")]
     #[account(6, writable, name = "base_vault", desc = "Base vault PDA, seeds are [b'vault', market_address, base_mint_address]")]
@@ -139,7 +139,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     #[account(5, writable, name = "base_account", desc = "Trader base token account")]
     #[account(6, writable, name = "quote_account", desc = "Trader quote token account")]
@@ -164,7 +164,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     #[account(5, writable, name = "base_account", desc = "Trader base token account")]
     #[account(6, writable, name = "quote_account", desc = "Trader quote token account")]
@@ -178,7 +178,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, writable, signer, name = "trader")]
+    #[account(3, signer, name = "trader")]
     #[account(4, name = "seat")]
     PlaceMultiplePostOnlyOrdersWithFreeFunds = 17,
 

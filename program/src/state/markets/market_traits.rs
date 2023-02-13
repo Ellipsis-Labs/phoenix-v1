@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use std::collections::LinkedList;
 
 use crate::{
     quantities::{
@@ -217,7 +216,7 @@ pub trait Market<
     fn cancel_multiple_orders_by_id(
         &mut self,
         trader_id: &MarketTraderId,
-        orders_to_cancel: &LinkedList<(MarketOrderId, Side)>,
+        orders_to_cancel: &[MarketOrderId],
         claim_funds: bool,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
     ) -> Option<MatchingEngineResponse>;

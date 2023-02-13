@@ -1,5 +1,3 @@
-use std::collections::LinkedList;
-
 use super::Market;
 use super::MarketEvent;
 use super::OrderId;
@@ -104,6 +102,7 @@ impl Ord for FIFOOrderId {
 pub struct FIFORestingOrder {
     pub trader_index: u64,
     pub num_base_lots: BaseLots, // Number of base lots quoted
+    _padding: [u64; 2],
 }
 
 impl FIFORestingOrder {
@@ -111,6 +110,7 @@ impl FIFORestingOrder {
         FIFORestingOrder {
             trader_index,
             num_base_lots,
+            _padding: [0; 2],
         }
     }
 }
@@ -138,6 +138,9 @@ pub struct FIFOMarket<
     const ASKS_SIZE: usize,
     const NUM_SEATS: usize,
 > {
+    /// Padding
+    pub _padding: [u64; 32],
+
     /// Number of base lots in a base unit. For example, if the lot size is 0.001 SOL, then base_lots_per_base_unit is 1000.
     pub base_lots_per_base_unit: BaseLotsPerBaseUnit,
 
@@ -396,7 +399,7 @@ impl<
     fn cancel_multiple_orders_by_id(
         &mut self,
         trader_id: &MarketTraderId,
-        orders_to_cancel: &LinkedList<(FIFOOrderId, Side)>,
+        orders_to_cancel: &[FIFOOrderId],
         claim_funds: bool,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
     ) -> Option<MatchingEngineResponse> {
@@ -692,10 +695,7 @@ impl<
             }
 
             (
-                FIFORestingOrder {
-                    trader_index: trader_index as u64,
-                    num_base_lots: order_packet.num_base_lots(),
-                },
+                FIFORestingOrder::new(trader_index as u64, order_packet.num_base_lots()),
                 MatchingEngineResponse::default(),
             )
         } else {
@@ -986,6 +986,7 @@ impl<
                     FIFORestingOrder {
                         trader_index,
                         num_base_lots: num_base_lots_quoted,
+                        ..
                     },
                 ) = if let Some((o_id, quote)) = book.get_min() {
                     (
@@ -1158,9 +1159,9 @@ impl<
                     .filter(|(_o_id, o)| {
                         o.trader_index == trader_index as u64 && o.num_base_lots > BaseLots::ZERO
                     })
-                    .map(|(o_id, _)| (*o_id, *side))
+                    .map(|(o_id, _)| *o_id)
             })
-            .collect();
+            .collect::<Vec<_>>();
         self.cancel_multiple_orders_by_id_inner(
             trader_index,
             &orders_to_cancel,
@@ -1192,16 +1193,14 @@ impl<
         let orders_to_cancel = book
             .iter()
             .take(num_orders_to_search.unwrap_or(num_orders))
-            .filter(|(_o_id, o)| {
-                o.trader_index == trader_index as u64 && o.num_base_lots > BaseLots::ZERO
-            })
+            .filter(|(_o_id, o)| o.trader_index == trader_index as u64)
             .filter(|(o_id, _)| match side {
                 Side::Bid => o_id.price_in_ticks >= last_tick,
                 Side::Ask => o_id.price_in_ticks <= last_tick,
             })
             .take(num_orders_to_cancel.unwrap_or(num_orders))
-            .map(|(o_id, _)| (*o_id, side))
-            .collect();
+            .map(|(o_id, _)| *o_id)
+            .collect::<Vec<_>>();
 
         self.cancel_multiple_orders_by_id_inner(
             trader_index,
@@ -1214,17 +1213,17 @@ impl<
     fn cancel_multiple_orders_by_id_inner(
         &mut self,
         trader_index: u32,
-        orders_to_cancel: &LinkedList<(FIFOOrderId, Side)>,
+        orders_to_cancel: &[FIFOOrderId],
         claim_funds: bool,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
     ) -> Option<MatchingEngineResponse> {
         let (quote_lots_released, base_lots_released) = orders_to_cancel
             .iter()
-            .filter_map(|&(order_id, side)| {
+            .filter_map(|&order_id| {
                 self.reduce_order_inner(
                     trader_index,
                     &order_id,
-                    side,
+                    Side::from_order_sequence_number(order_id.order_sequence_number),
                     None,
                     claim_funds,
                     record_event_fn,
