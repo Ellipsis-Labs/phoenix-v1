@@ -25,7 +25,7 @@ export const CancelAllOrdersWithFreeFundsStruct = new beet.BeetArgsStruct<{
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @category Instructions
  * @category CancelAllOrdersWithFreeFunds
  * @category generated
@@ -73,7 +73,7 @@ export function createCancelAllOrdersWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
   ]

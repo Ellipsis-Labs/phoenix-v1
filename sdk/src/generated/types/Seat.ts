@@ -13,6 +13,7 @@ export type Seat = {
   market: web3.PublicKey
   trader: web3.PublicKey
   approvalStatus: beet.bignum
+  padding: beet.bignum[] /* size: 6 */
 }
 
 /**
@@ -25,6 +26,7 @@ export const seatBeet = new beet.BeetArgsStruct<Seat>(
     ['market', beetSolana.publicKey],
     ['trader', beetSolana.publicKey],
     ['approvalStatus', beet.u64],
+    ['padding', beet.uniformFixedSizeArray(beet.u64, 6)],
   ],
   'Seat'
 )

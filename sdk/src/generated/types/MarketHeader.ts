@@ -23,8 +23,9 @@ export type MarketHeader = {
   feeRecipient: web3.PublicKey
   marketSequenceNumber: beet.bignum
   successor: web3.PublicKey
-  padding1: beet.bignum
-  padding2: beet.bignum
+  rawBaseUnitsPerBaseUnit: number
+  padding1: number
+  padding2: beet.bignum[] /* size: 32 */
 }
 
 /**
@@ -45,8 +46,9 @@ export const marketHeaderBeet = new beet.BeetArgsStruct<MarketHeader>(
     ['feeRecipient', beetSolana.publicKey],
     ['marketSequenceNumber', beet.u64],
     ['successor', beetSolana.publicKey],
-    ['padding1', beet.u64],
-    ['padding2', beet.u64],
+    ['rawBaseUnitsPerBaseUnit', beet.u32],
+    ['padding1', beet.u32],
+    ['padding2', beet.uniformFixedSizeArray(beet.u64, 32)],
   ],
   'MarketHeader'
 )

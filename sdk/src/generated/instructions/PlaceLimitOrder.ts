@@ -8,22 +8,39 @@
 import * as splToken from '@solana/spl-token'
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import { OrderPacket, orderPacketBeet } from '../types/OrderPacket'
 
 /**
  * @category Instructions
  * @category PlaceLimitOrder
  * @category generated
  */
-export const PlaceLimitOrderStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'PlaceLimitOrderInstructionArgs')
+export type PlaceLimitOrderInstructionArgs = {
+  orderPacket: OrderPacket
+}
+/**
+ * @category Instructions
+ * @category PlaceLimitOrder
+ * @category generated
+ */
+export const PlaceLimitOrderStruct = new beet.FixableBeetArgsStruct<
+  PlaceLimitOrderInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['orderPacket', orderPacketBeet],
+  ],
+  'PlaceLimitOrderInstructionArgs'
+)
 /**
  * Accounts required by the _PlaceLimitOrder_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [] seat
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
@@ -52,16 +69,20 @@ export const placeLimitOrderInstructionDiscriminator = 2
  * Creates a _PlaceLimitOrder_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category PlaceLimitOrder
  * @category generated
  */
 export function createPlaceLimitOrderInstruction(
   accounts: PlaceLimitOrderInstructionAccounts,
+  args: PlaceLimitOrderInstructionArgs,
   programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
 ) {
   const [data] = PlaceLimitOrderStruct.serialize({
     instructionDiscriminator: placeLimitOrderInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -81,7 +102,7 @@ export function createPlaceLimitOrderInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

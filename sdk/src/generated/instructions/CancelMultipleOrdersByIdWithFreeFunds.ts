@@ -24,7 +24,7 @@ export const CancelMultipleOrdersByIdWithFreeFundsStruct =
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @category Instructions
  * @category CancelMultipleOrdersByIdWithFreeFunds
  * @category generated
@@ -72,7 +72,7 @@ export function createCancelMultipleOrdersByIdWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
   ]

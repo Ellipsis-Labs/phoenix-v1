@@ -19,8 +19,8 @@ default = []
 test = []
 
 [dependencies]
-solana-program = { workspace = true }
 shank = "0.0.9"
+solana-program = { workspace = true }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 lib-sokoban = { workspace = true } 
