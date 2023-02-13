@@ -29,6 +29,7 @@ pub fn create_initialize_market_instructions(
     tick_size_in_quote_lots_per_base_unit: u64,
     taker_fee_bps: u16,
     fee_collector: &Pubkey,
+    raw_base_units_per_base_unit: Option<u32>,
 ) -> Result<Vec<Instruction>, ProgramError> {
     let space = std::mem::size_of::<MarketHeader>() + get_market_size(&header_params)?;
     Ok(vec![
@@ -50,6 +51,7 @@ pub fn create_initialize_market_instructions(
             tick_size_in_quote_lots_per_base_unit,
             taker_fee_bps,
             fee_collector,
+            raw_base_units_per_base_unit,
         ),
     ])
 }
@@ -65,6 +67,7 @@ pub fn create_initialize_market_instructions_default(
     num_base_lots_per_base_unit: u64,
     tick_size_in_quote_lots_per_base_unit: u64,
     taker_fee_bps: u16,
+    raw_base_units_per_base_unit: Option<u32>,
 ) -> Result<Vec<Instruction>, ProgramError> {
     let space = std::mem::size_of::<MarketHeader>() + get_market_size(&header_params)?;
     Ok(vec![
@@ -86,6 +89,7 @@ pub fn create_initialize_market_instructions_default(
             tick_size_in_quote_lots_per_base_unit,
             taker_fee_bps,
             market_creator,
+            raw_base_units_per_base_unit,
         ),
     ])
 }
@@ -102,6 +106,7 @@ pub fn create_initialize_market_instruction(
     tick_size_in_quote_lots_per_base_unit: u64,
     taker_fee_bps: u16,
     fee_collector: &Pubkey,
+    raw_base_units_per_base_unit: Option<u32>,
 ) -> Instruction {
     let (base_vault, _) = get_vault_address(market, base);
     let (quote_vault, _) = get_vault_address(market, quote);
@@ -128,6 +133,7 @@ pub fn create_initialize_market_instruction(
                 tick_size_in_quote_lots_per_base_unit,
                 taker_fee_bps,
                 fee_collector: *fee_collector,
+                raw_base_units_per_base_unit,
             }
             .try_to_vec()
             .unwrap(),

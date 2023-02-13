@@ -46,7 +46,7 @@ export const claimAuthorityInstructionDiscriminator = 101
  */
 export function createClaimAuthorityInstruction(
   accounts: ClaimAuthorityInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = ClaimAuthorityStruct.serialize({
     instructionDiscriminator: claimAuthorityInstructionDiscriminator,

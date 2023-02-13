@@ -23,7 +23,7 @@ export const CancelAllOrdersStruct = new beet.BeetArgsStruct<{
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
  * @property [_writable_] baseVault Base vault PDA, seeds are [b'vault', market_address, base_mint_address]
@@ -56,7 +56,7 @@ export const cancelAllOrdersInstructionDiscriminator = 6
  */
 export function createCancelAllOrdersInstruction(
   accounts: CancelAllOrdersInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = CancelAllOrdersStruct.serialize({
     instructionDiscriminator: cancelAllOrdersInstructionDiscriminator,
@@ -79,7 +79,7 @@ export function createCancelAllOrdersInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

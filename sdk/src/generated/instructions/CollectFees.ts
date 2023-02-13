@@ -52,7 +52,7 @@ export const collectFeesInstructionDiscriminator = 108
  */
 export function createCollectFeesInstruction(
   accounts: CollectFeesInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = CollectFeesStruct.serialize({
     instructionDiscriminator: collectFeesInstructionDiscriminator,

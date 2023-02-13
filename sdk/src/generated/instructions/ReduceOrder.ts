@@ -8,22 +8,42 @@
 import * as splToken from '@solana/spl-token'
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import {
+  ReduceOrderParams,
+  reduceOrderParamsBeet,
+} from '../types/ReduceOrderParams'
 
 /**
  * @category Instructions
  * @category ReduceOrder
  * @category generated
  */
-export const ReduceOrderStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'ReduceOrderInstructionArgs')
+export type ReduceOrderInstructionArgs = {
+  params: ReduceOrderParams
+}
+/**
+ * @category Instructions
+ * @category ReduceOrder
+ * @category generated
+ */
+export const ReduceOrderStruct = new beet.BeetArgsStruct<
+  ReduceOrderInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['params', reduceOrderParamsBeet],
+  ],
+  'ReduceOrderInstructionArgs'
+)
 /**
  * Accounts required by the _ReduceOrder_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
  * @property [_writable_] baseVault Base vault PDA, seeds are [b'vault', market_address, base_mint_address]
@@ -50,16 +70,20 @@ export const reduceOrderInstructionDiscriminator = 4
  * Creates a _ReduceOrder_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category ReduceOrder
  * @category generated
  */
 export function createReduceOrderInstruction(
   accounts: ReduceOrderInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: ReduceOrderInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = ReduceOrderStruct.serialize({
     instructionDiscriminator: reduceOrderInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -79,7 +103,7 @@ export function createReduceOrderInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

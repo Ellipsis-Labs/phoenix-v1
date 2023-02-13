@@ -269,23 +269,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b645a089122eccb6111b4f81cbc1a49f5900ac4666bb93ac027feaecf15607bf"
 
 [[package]]
-name = "binance"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518c391846fd4c6dad55741cfa1e3f9dc6b533dfa2382c4f807a8c58ba915046"
-dependencies = [
- "error-chain",
- "hex",
- "hmac 0.11.0",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.9.9",
- "tungstenite 0.15.0",
- "url",
-]
-
-[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -885,16 +868,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crypto-mac"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1d1a86f49236c215f271d40892d5fc950490551400b02ef360692c29815c714"
-dependencies = [
- "generic-array",
- "subtle",
-]
-
-[[package]]
 name = "ctr"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1164,23 +1137,38 @@ checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
 name = "ellipsis-client"
-version = "0.1.10"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c63e7353cf66ea0eed74a3363f77d1de9997d447e36581ce4688c4b1890f8d"
+checksum = "92efab2c0f9b9cb5b40190256544883b6bb02f90cf6301bfffecf1479bf74b5a"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
+ "base64 0.13.1",
  "bincode",
+ "borsh 0.9.3",
  "bs58",
+ "chrono-humanize",
+ "crossbeam-channel",
+ "futures 0.3.26",
  "itertools",
+ "lazy_static",
+ "log",
+ "serde",
+ "solana-bpf-loader-program",
  "solana-client",
  "solana-logger",
  "solana-program",
+ "solana-program-runtime",
+ "solana-runtime",
  "solana-sdk",
- "solana-test-client",
+ "solana-send-transaction-service",
  "solana-transaction-status",
+ "solana-vote-program",
+ "tarpc",
  "thiserror",
  "tokio",
+ "tokio-serde",
 ]
 
 [[package]]
@@ -1282,15 +1270,6 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
-]
-
-[[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "version_check",
 ]
 
 [[package]]
@@ -1609,12 +1588,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
-
-[[package]]
 name = "histogram"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1637,16 +1610,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
 dependencies = [
  "crypto-mac 0.10.1",
- "digest 0.9.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
-dependencies = [
- "crypto-mac 0.11.1",
  "digest 0.9.0",
 ]
 
@@ -2149,7 +2112,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a53d79ba8304ac1c4f9eb3b9d281f21f7be9d4626f72ce7df4ad8fbde4f38a74"
 dependencies = [
  "modular-bitfield-impl",
- "static_assertions",
+ "static_assertions 1.1.0",
 ]
 
 [[package]]
@@ -2543,9 +2506,10 @@ dependencies = [
  "shank",
  "solana-program",
  "solana-sdk",
- "solana-test-client",
+ "solana-security-txt",
  "spl-associated-token-account",
  "spl-token",
+ "static_assertions 0.1.1",
  "thiserror",
  "tokio",
 ]
@@ -2553,11 +2517,10 @@ dependencies = [
 [[package]]
 name = "phoenix-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=6a2e629#6a2e629e8c9e4197f0549f4a9ad50798976f38cd"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=cb79d23#cb79d237a4fa2b4c367a3d7cee70265e0feca364"
 dependencies = [
  "anyhow",
  "async-trait",
- "binance",
  "borsh 0.9.3",
  "clap 3.2.23",
  "coinbase-pro-rs",
@@ -2581,7 +2544,7 @@ dependencies = [
 [[package]]
 name = "phoenix-sdk-core"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=6a2e629#6a2e629e8c9e4197f0549f4a9ad50798976f38cd"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=cb79d23#cb79d237a4fa2b4c367a3d7cee70265e0feca364"
 dependencies = [
  "anyhow",
  "borsh 0.9.3",
@@ -2598,7 +2561,7 @@ dependencies = [
 [[package]]
 name = "phoenix-types"
 version = "0.1.9"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-types?rev=bf6ecf4#bf6ecf404505a1c13ae55a15a83ba3841fcf1229"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-types?rev=ca7ccef#ca7ccefc0d08f3e4158199eb0bb6333334c1e32c"
 dependencies = [
  "borsh 0.9.3",
  "bytemuck",
@@ -3033,12 +2996,10 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls",
- "hyper-tls",
  "ipnet",
  "js-sys",
  "log",
  "mime",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -3048,7 +3009,6 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls",
  "tokio-util 0.7.7",
  "tower-service",
@@ -4128,6 +4088,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-security-txt"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e0461f3afb29d8591300b3dd09b5472b3772d65688a2826ad960b8c0d5fa605"
+
+[[package]]
 name = "solana-send-transaction-service"
 version = "1.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4192,38 +4158,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "x509-parser",
-]
-
-[[package]]
-name = "solana-test-client"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acbfd8c11e8b829131affe54a9a4cfe8f6eab32bf71f7271b145c7de6b540908"
-dependencies = [
- "assert_matches",
- "async-trait",
- "base64 0.13.1",
- "bincode",
- "borsh 0.9.3",
- "chrono-humanize",
- "crossbeam-channel",
- "futures 0.3.26",
- "itertools",
- "lazy_static",
- "log",
- "serde",
- "solana-bpf-loader-program",
- "solana-client",
- "solana-logger",
- "solana-program-runtime",
- "solana-runtime",
- "solana-sdk",
- "solana-send-transaction-service",
- "solana-vote-program",
- "tarpc",
- "thiserror",
- "tokio",
- "tokio-serde",
 ]
 
 [[package]]
@@ -4450,6 +4384,12 @@ dependencies = [
 
 [[package]]
 name = "static_assertions"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f406d6ee68db6796e11ffd7b4d171864c58b7451e79ef9460ea33c287a1f89a7"
+
+[[package]]
+name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
@@ -4559,7 +4499,7 @@ dependencies = [
  "pin-project",
  "rand 0.8.5",
  "serde",
- "static_assertions",
+ "static_assertions 1.1.0",
  "tarpc-plugins",
  "thiserror",
  "tokio",
@@ -4971,26 +4911,6 @@ dependencies = [
  "native-tls",
  "rand 0.8.5",
  "sha-1 0.9.8",
- "url",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "983d40747bce878d2fb67d910dcb8bd3eca2b2358540c3cc1b98c027407a3ae3"
-dependencies = [
- "base64 0.13.1",
- "byteorder",
- "bytes",
- "http",
- "httparse",
- "log",
- "native-tls",
- "rand 0.8.5",
- "sha-1 0.9.8",
- "thiserror",
  "url",
  "utf-8",
 ]

@@ -8,22 +8,42 @@
 import * as splToken from '@solana/spl-token'
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import {
+  CancelUpToParams,
+  cancelUpToParamsBeet,
+} from '../types/CancelUpToParams'
 
 /**
  * @category Instructions
  * @category CancelUpTo
  * @category generated
  */
-export const CancelUpToStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'CancelUpToInstructionArgs')
+export type CancelUpToInstructionArgs = {
+  params: CancelUpToParams
+}
+/**
+ * @category Instructions
+ * @category CancelUpTo
+ * @category generated
+ */
+export const CancelUpToStruct = new beet.FixableBeetArgsStruct<
+  CancelUpToInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['params', cancelUpToParamsBeet],
+  ],
+  'CancelUpToInstructionArgs'
+)
 /**
  * Accounts required by the _CancelUpTo_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
  * @property [_writable_] baseVault Base vault PDA, seeds are [b'vault', market_address, base_mint_address]
@@ -50,16 +70,20 @@ export const cancelUpToInstructionDiscriminator = 8
  * Creates a _CancelUpTo_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category CancelUpTo
  * @category generated
  */
 export function createCancelUpToInstruction(
   accounts: CancelUpToInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: CancelUpToInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = CancelUpToStruct.serialize({
     instructionDiscriminator: cancelUpToInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -79,7 +103,7 @@ export function createCancelUpToInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

@@ -15,7 +15,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_compute_units,
     pubkey::Pubkey,
 };
-use std::{collections::LinkedList, mem::size_of};
+use std::mem::size_of;
 
 use super::CancelOrderParams;
 
@@ -159,19 +159,26 @@ pub(crate) fn process_cancel_multiple_orders_by_id<'a, 'info>(
         sol_log_compute_units();
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
-        let orders_to_cancel = LinkedList::from_iter(cancel_params.orders.iter().map(
-            |CancelOrderParams {
-                 side,
-                 price_in_ticks,
-                 order_sequence_number: order_id,
-             }|
-             -> (FIFOOrderId, Side) {
-                (
-                    FIFOOrderId::new(Ticks::new(*price_in_ticks), *order_id),
-                    *side,
-                )
-            },
-        ));
+        let orders_to_cancel = cancel_params
+            .orders
+            .iter()
+            .filter_map(
+                |CancelOrderParams {
+                     side,
+                     price_in_ticks,
+                     order_sequence_number,
+                 }| {
+                    if *side == Side::from_order_sequence_number(*order_sequence_number) {
+                        Some(FIFOOrderId::new(
+                            Ticks::new(*price_in_ticks),
+                            *order_sequence_number,
+                        ))
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
 
         market
             .cancel_multiple_orders_by_id(

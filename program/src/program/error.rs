@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum PhoenixError {
     #[error("Invalid market parameters error")]
     InvalidMarketParameters = 0,
-    #[error("Invalid market authority error")]
+    #[error("Invalid exchange authority error")]
     InvalidMarketAuthority = 1,
     #[error("Market deserialization error")]
     FailedToLoadMarketFromAccount = 2,

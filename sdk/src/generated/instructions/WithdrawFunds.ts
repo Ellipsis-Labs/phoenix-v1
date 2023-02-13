@@ -8,22 +8,39 @@
 import * as splToken from '@solana/spl-token'
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import { WithdrawParams, withdrawParamsBeet } from '../types/WithdrawParams'
 
 /**
  * @category Instructions
  * @category WithdrawFunds
  * @category generated
  */
-export const WithdrawFundsStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'WithdrawFundsInstructionArgs')
+export type WithdrawFundsInstructionArgs = {
+  withdrawFundsParams: WithdrawParams
+}
+/**
+ * @category Instructions
+ * @category WithdrawFunds
+ * @category generated
+ */
+export const WithdrawFundsStruct = new beet.FixableBeetArgsStruct<
+  WithdrawFundsInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['withdrawFundsParams', withdrawParamsBeet],
+  ],
+  'WithdrawFundsInstructionArgs'
+)
 /**
  * Accounts required by the _WithdrawFunds_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
  * @property [_writable_] baseVault Base vault PDA, seeds are [b'vault', market_address, base_mint_address]
@@ -50,16 +67,20 @@ export const withdrawFundsInstructionDiscriminator = 12
  * Creates a _WithdrawFunds_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category WithdrawFunds
  * @category generated
  */
 export function createWithdrawFundsInstruction(
   accounts: WithdrawFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: WithdrawFundsInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = WithdrawFundsStruct.serialize({
     instructionDiscriminator: withdrawFundsInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -79,7 +100,7 @@ export function createWithdrawFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

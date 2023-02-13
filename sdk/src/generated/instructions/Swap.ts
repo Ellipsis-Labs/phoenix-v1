@@ -8,22 +8,39 @@
 import * as splToken from '@solana/spl-token'
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import { OrderPacket, orderPacketBeet } from '../types/OrderPacket'
 
 /**
  * @category Instructions
  * @category Swap
  * @category generated
  */
-export const SwapStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'SwapInstructionArgs')
+export type SwapInstructionArgs = {
+  orderPacket: OrderPacket
+}
+/**
+ * @category Instructions
+ * @category Swap
+ * @category generated
+ */
+export const SwapStruct = new beet.FixableBeetArgsStruct<
+  SwapInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['orderPacket', orderPacketBeet],
+  ],
+  'SwapInstructionArgs'
+)
 /**
  * Accounts required by the _Swap_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [_writable_] baseAccount Trader base token account
  * @property [_writable_] quoteAccount Trader quote token account
  * @property [_writable_] baseVault Base vault PDA, seeds are [b'vault', market_address, base_mint_address]
@@ -50,16 +67,20 @@ export const swapInstructionDiscriminator = 0
  * Creates a _Swap_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category Swap
  * @category generated
  */
 export function createSwapInstruction(
   accounts: SwapInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: SwapInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = SwapStruct.serialize({
     instructionDiscriminator: swapInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -79,7 +100,7 @@ export function createSwapInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

@@ -60,7 +60,7 @@ export const forceCancelOrdersInstructionDiscriminator = 107
  */
 export function createForceCancelOrdersInstruction(
   accounts: ForceCancelOrdersInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = ForceCancelOrdersStruct.serialize({
     instructionDiscriminator: forceCancelOrdersInstructionDiscriminator,

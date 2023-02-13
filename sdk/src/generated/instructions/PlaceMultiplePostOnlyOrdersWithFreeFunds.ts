@@ -7,15 +7,34 @@
 
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import {
+  MultipleOrderPacket,
+  multipleOrderPacketBeet,
+} from '../types/MultipleOrderPacket'
 
 /**
  * @category Instructions
  * @category PlaceMultiplePostOnlyOrdersWithFreeFunds
  * @category generated
  */
+export type PlaceMultiplePostOnlyOrdersWithFreeFundsInstructionArgs = {
+  multipleOrderPacket: MultipleOrderPacket
+}
+/**
+ * @category Instructions
+ * @category PlaceMultiplePostOnlyOrdersWithFreeFunds
+ * @category generated
+ */
 export const PlaceMultiplePostOnlyOrdersWithFreeFundsStruct =
-  new beet.BeetArgsStruct<{ instructionDiscriminator: number }>(
-    [['instructionDiscriminator', beet.u8]],
+  new beet.FixableBeetArgsStruct<
+    PlaceMultiplePostOnlyOrdersWithFreeFundsInstructionArgs & {
+      instructionDiscriminator: number
+    }
+  >(
+    [
+      ['instructionDiscriminator', beet.u8],
+      ['multipleOrderPacket', multipleOrderPacketBeet],
+    ],
     'PlaceMultiplePostOnlyOrdersWithFreeFundsInstructionArgs'
   )
 /**
@@ -24,7 +43,7 @@ export const PlaceMultiplePostOnlyOrdersWithFreeFundsStruct =
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [] seat
  * @category Instructions
  * @category PlaceMultiplePostOnlyOrdersWithFreeFunds
@@ -44,17 +63,21 @@ export const placeMultiplePostOnlyOrdersWithFreeFundsInstructionDiscriminator = 
  * Creates a _PlaceMultiplePostOnlyOrdersWithFreeFunds_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category PlaceMultiplePostOnlyOrdersWithFreeFunds
  * @category generated
  */
 export function createPlaceMultiplePostOnlyOrdersWithFreeFundsInstruction(
   accounts: PlaceMultiplePostOnlyOrdersWithFreeFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: PlaceMultiplePostOnlyOrdersWithFreeFundsInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = PlaceMultiplePostOnlyOrdersWithFreeFundsStruct.serialize({
     instructionDiscriminator:
       placeMultiplePostOnlyOrdersWithFreeFundsInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -74,7 +97,7 @@ export function createPlaceMultiplePostOnlyOrdersWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {

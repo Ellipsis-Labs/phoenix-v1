@@ -1,15 +1,13 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, Zeroable};
 use sokoban::node_allocator::ZeroCopy;
-use solana_program::{
-    keccak, log::sol_log_compute_units, program_error::ProgramError, pubkey::Pubkey,
-};
+use solana_program::{keccak, program_error::ProgramError, pubkey::Pubkey};
 
 use crate::quantities::{
     BaseAtomsPerBaseLot, QuoteAtomsPerBaseUnitPerTick, QuoteAtomsPerQuoteLot, WrapperU64,
 };
 
-use super::status::MarketStatus;
+use super::status::{MarketStatus, SeatApprovalStatus};
 
 /// This function returns the canonical discriminant of the given type. It is the result
 /// of hashing together the program ID and the name of the type.
@@ -19,7 +17,6 @@ use super::status::MarketStatus;
 /// expecting an account of type `Foo`, but by checking the discriminants, the function
 /// would be able to detect that the `Bar` account is not of the expected type `Foo`.
 pub fn get_discriminant<T>() -> Result<u64, ProgramError> {
-    sol_log_compute_units();
     let type_name = std::any::type_name::<T>();
     let discriminant = u64::from_le_bytes(
         keccak::hashv(&[crate::ID.as_ref(), type_name.as_bytes()]).as_ref()[..8]
@@ -29,7 +26,6 @@ pub fn get_discriminant<T>() -> Result<u64, ProgramError> {
                 ProgramError::InvalidAccountData
             })?,
     );
-    sol_log_compute_units();
     phoenix_log!("Discriminant for {} is {}", type_name, discriminant);
     Ok(discriminant)
 }
@@ -75,8 +71,9 @@ pub struct MarketHeader {
     pub fee_recipient: Pubkey,
     pub market_sequence_number: u64,
     pub successor: Pubkey,
-    _padding1: u64,
-    _padding2: u64,
+    pub raw_base_units_per_base_unit: u32,
+    _padding1: u32,
+    _padding2: [u64; 32],
 }
 impl ZeroCopy for MarketHeader {}
 
@@ -92,6 +89,7 @@ impl MarketHeader {
         authority: Pubkey,
         successor: Pubkey,
         fee_recipient: Pubkey,
+        raw_base_units_per_base_unit: u32,
     ) -> Self {
         Self {
             discriminant: get_discriminant::<MarketHeader>().unwrap(),
@@ -106,8 +104,9 @@ impl MarketHeader {
             fee_recipient,
             market_sequence_number: 0,
             successor,
+            raw_base_units_per_base_unit,
             _padding1: 0,
-            _padding2: 0,
+            _padding2: [0; 32],
         }
     }
 
@@ -145,6 +144,38 @@ pub struct Seat {
     pub market: Pubkey,
     pub trader: Pubkey,
     pub approval_status: u64,
+    // Padding
+    _padding: [u64; 6],
 }
 
 impl ZeroCopy for Seat {}
+
+impl Seat {
+    pub fn new_init(market: Pubkey, trader: Pubkey) -> Result<Self, ProgramError> {
+        Ok(Self {
+            discriminant: get_discriminant::<Seat>()?,
+            market,
+            trader,
+            approval_status: SeatApprovalStatus::NotApproved as u64,
+            _padding: [0; 6],
+        })
+    }
+}
+
+// Always run tests before every deploy
+#[test]
+fn test_valid_discriminants() {
+    assert_eq!(
+        std::any::type_name::<MarketHeader>(),
+        "phoenix::program::accounts::MarketHeader"
+    );
+    assert_eq!(
+        std::any::type_name::<Seat>(),
+        "phoenix::program::accounts::Seat"
+    );
+    assert_eq!(
+        get_discriminant::<MarketHeader>().unwrap(),
+        5486421722818059155
+    );
+    assert_eq!(get_discriminant::<Seat>().unwrap(), 11792425028094311033);
+}

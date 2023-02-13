@@ -48,7 +48,7 @@ export const changeSeatStatusInstructionDiscriminator = 104
  */
 export function createChangeSeatStatusInstruction(
   accounts: ChangeSeatStatusInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = ChangeSeatStatusStruct.serialize({
     instructionDiscriminator: changeSeatStatusInstructionDiscriminator,

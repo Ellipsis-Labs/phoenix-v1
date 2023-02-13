@@ -13,7 +13,7 @@ pub enum MarketStatus {
     PostOnly,
     /// Only reductions and withdrawals are accepted.
     Paused,
-    /// Only reductions and withdrawals are accepted. The market authority can forcibly cancel
+    /// Only reductions and withdrawals are accepted. The exchange authority can forcibly cancel
     /// all orders.
     Closed,
     /// Used to signal the market to be deleted. Can only be called in a Closed state where all orders

@@ -1,4 +1,4 @@
-use ellipsis_client::{EllipsisClient, EllipsisClientResult};
+use ellipsis_client::{program_test::*, EllipsisClient, EllipsisClientResult};
 use solana_program::native_token::LAMPORTS_PER_SOL;
 use solana_sdk::{
     account::Account,
@@ -8,7 +8,6 @@ use solana_sdk::{
     signer::{keypair::Keypair, Signer},
     system_instruction,
 };
-use solana_test_client::program_test::*;
 use spl_token::state::Mint;
 use std::str::FromStr;
 

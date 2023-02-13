@@ -11,7 +11,7 @@ use crate::{
     phoenix_log_authority,
     program::{
         validation::checkers::{EmptyAccount, Program, Signer},
-        TokenParams,
+        MarketHeader, TokenParams,
     },
 };
 use core::slice::Iter;
@@ -21,6 +21,8 @@ use solana_program::{
     pubkey::Pubkey,
     system_program,
 };
+use static_assertions::const_assert;
+use static_assertions::const_assert_eq;
 
 pub fn get_vault_address(market: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"vault", market.as_ref(), mint.as_ref()], &crate::ID)
@@ -54,6 +56,7 @@ pub struct PhoenixMarketContext<'a, 'info> {
 
 impl<'a, 'info> PhoenixMarketContext<'a, 'info> {
     pub fn load(account_iter: &mut Iter<'a, AccountInfo<'info>>) -> Result<Self, ProgramError> {
+        const_assert_eq!(std::mem::size_of::<MarketHeader>(), 576);
         Ok(Self {
             market_info: MarketAccountInfo::new(next_account_info(account_iter)?)?,
             signer: Signer::new(next_account_info(account_iter)?)?,
@@ -63,6 +66,7 @@ impl<'a, 'info> PhoenixMarketContext<'a, 'info> {
     pub fn load_init(
         account_iter: &mut Iter<'a, AccountInfo<'info>>,
     ) -> Result<Self, ProgramError> {
+        const_assert_eq!(std::mem::size_of::<MarketHeader>(), 576);
         Ok(Self {
             market_info: MarketAccountInfo::new_init(next_account_info(account_iter)?)?,
             signer: Signer::new(next_account_info(account_iter)?)?,
@@ -451,9 +455,10 @@ impl<'a, 'info> CollectFeesContext<'a, 'info> {
                 &quote_params.mint_key,
                 &fee_recipient,
             )?,
-            quote_vault: TokenAccountInfo::new_with_owner(
+            quote_vault: TokenAccountInfo::new_with_owner_and_key(
                 next_account_info(account_iter)?,
                 &quote_params.mint_key,
+                &quote_params.vault_key,
                 &quote_params.vault_key,
             )?,
             token_program: Program::new(next_account_info(account_iter)?, &spl_token::id())?,

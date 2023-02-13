@@ -7,16 +7,33 @@
 
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import {
+  CancelUpToParams,
+  cancelUpToParamsBeet,
+} from '../types/CancelUpToParams'
 
 /**
  * @category Instructions
  * @category CancelUpToWithFreeFunds
  * @category generated
  */
-export const CancelUpToWithFreeFundsStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>(
-  [['instructionDiscriminator', beet.u8]],
+export type CancelUpToWithFreeFundsInstructionArgs = {
+  params: CancelUpToParams
+}
+/**
+ * @category Instructions
+ * @category CancelUpToWithFreeFunds
+ * @category generated
+ */
+export const CancelUpToWithFreeFundsStruct = new beet.FixableBeetArgsStruct<
+  CancelUpToWithFreeFundsInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['params', cancelUpToParamsBeet],
+  ],
   'CancelUpToWithFreeFundsInstructionArgs'
 )
 /**
@@ -25,7 +42,7 @@ export const CancelUpToWithFreeFundsStruct = new beet.BeetArgsStruct<{
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @category Instructions
  * @category CancelUpToWithFreeFunds
  * @category generated
@@ -43,16 +60,20 @@ export const cancelUpToWithFreeFundsInstructionDiscriminator = 9
  * Creates a _CancelUpToWithFreeFunds_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category CancelUpToWithFreeFunds
  * @category generated
  */
 export function createCancelUpToWithFreeFundsInstruction(
   accounts: CancelUpToWithFreeFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: CancelUpToWithFreeFundsInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = CancelUpToWithFreeFundsStruct.serialize({
     instructionDiscriminator: cancelUpToWithFreeFundsInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -72,7 +93,7 @@ export function createCancelUpToWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
   ]

@@ -7,16 +7,13 @@ use rand::prelude::*;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::ZeroCopy;
 
-const BOOK_SIZE: usize = 2048;
+const BOOK_SIZE: usize = 4096;
 
 type TraderId = u128;
-type Dex = FIFOMarket<TraderId, BOOK_SIZE, BOOK_SIZE, 1024>;
+type Dex = FIFOMarket<TraderId, BOOK_SIZE, BOOK_SIZE, 8192>;
 
 fn setup_market() -> Dex {
-    Dex::new(
-        QuoteLotsPerBaseUnitPerTick::new(10000),
-        BaseLotsPerBaseUnit::new(100),
-    )
+    setup_market_with_params(10000, 100, 0)
 }
 
 fn setup_market_with_params(
@@ -31,7 +28,7 @@ fn setup_market_with_params(
         BaseLotsPerBaseUnit::new(base_lots_per_base_unit),
     );
     dex.set_fee(fees);
-    dex.clone()
+    *dex
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -44,7 +41,7 @@ fn layer_orders(
     start_size: u64,
     size_step: u64,
     side: Side,
-    event_recorder: &mut dyn FnMut(MarketEvent<TraderId>) -> (),
+    event_recorder: &mut dyn FnMut(MarketEvent<TraderId>),
 ) {
     assert!(price_step > 0 && size_step > 0);
     let mut prices = vec![];
@@ -86,7 +83,7 @@ fn layer_orders(
 
 #[test]
 fn test_market_simple() {
-    use std::collections::{HashSet, LinkedList};
+    use std::collections::HashSet;
 
     let mut rng = StdRng::seed_from_u64(2);
     let mut market = setup_market();
@@ -332,8 +329,8 @@ fn test_market_simple() {
                 .bids
                 .iter()
                 .filter(|(_k, v)| v.trader_index == market.traders.get_addr(&m) as u64)
-                .map(|(k, _v)| (*k, Side::Bid))
-                .collect::<LinkedList<_>>();
+                .map(|(k, _v)| *k)
+                .collect::<Vec<_>>();
             market.cancel_multiple_orders_by_id(m, &orders, true, &mut record_event_fn);
         }
     }
@@ -1000,8 +997,31 @@ fn test_orders_with_only_free_funds() {
         .is_some());
 }
 
+fn seed_market_with_orders(
+    trader: &TraderId,
+    market: &mut Dex,
+    record_event_fn: &mut dyn FnMut(MarketEvent<TraderId>),
+) {
+    for i in 1..11 {
+        assert!(market
+            .place_order(
+                trader,
+                OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10),
+                record_event_fn,
+            )
+            .is_some());
+        assert!(market
+            .place_order(
+                trader,
+                OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10),
+                record_event_fn,
+            )
+            .is_some());
+    }
+}
+
 #[test]
-fn test_fok_and_ioc_limit() {
+fn test_fok_and_ioc_limit_1() {
     let mut rng = StdRng::seed_from_u64(2);
     let mut market = Box::new(setup_market());
     let mut event_recorder = VecDeque::new();
@@ -1010,31 +1030,13 @@ fn test_fok_and_ioc_limit() {
     let trader = rng.gen::<u128>();
     let taker = rng.gen::<u128>();
 
-    for i in 1..11 {
-        assert!(market
-            .place_order(
-                &trader,
-                OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10),
-                &mut record_event_fn,
-            )
-            .is_some());
-        assert!(market
-            .place_order(
-                &trader,
-                OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10),
-                &mut record_event_fn,
-            )
-            .is_some());
-    }
-
-    let prev_market_state = Box::new(*market);
-    let starting_ladder = market.get_typed_ladder(5);
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
 
     // buy through 3 levels of offers
     let expected_quote_lots_used = Ticks::new(102) // average price 102
-            * market.tick_size_in_quote_lots_per_base_unit
-            * BaseLots::new(30) // clear 3 levels of 10 base lots each
-            / market.base_lots_per_base_unit;
+                * market.tick_size_in_quote_lots_per_base_unit
+                * BaseLots::new(30) // clear 3 levels of 10 base lots each
+                / market.base_lots_per_base_unit;
     let (order, matching_engine_response) = market
         .place_order(
             &taker,
@@ -1057,9 +1059,9 @@ fn test_fok_and_ioc_limit() {
 
     // sell through 3 levels of bids
     let expected_quote_lots_used = Ticks::new(98) // average price 98
-            * market.tick_size_in_quote_lots_per_base_unit
-            * BaseLots::new(30) // clear 3 levels of 10 base lots each
-            / market.base_lots_per_base_unit;
+                * market.tick_size_in_quote_lots_per_base_unit
+                * BaseLots::new(30) // clear 3 levels of 10 base lots each
+                / market.base_lots_per_base_unit;
     let (order, matching_engine_response) = market
         .place_order(
             &taker,
@@ -1079,64 +1081,19 @@ fn test_fok_and_ioc_limit() {
         matching_engine_response
             == MatchingEngineResponse::new_from_sell(BaseLots::new(30), expected_quote_lots_used,)
     );
+}
 
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+#[test]
+fn test_fok_and_ioc_limit_2() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
 
-    // (1) FOK should fail if the base lot budget is not enough to fill the order (changed tick limit)
-    assert!(market
-        .place_order(
-            &taker,
-            OrderPacket::new_fok_buy_with_limit_price(
-                103,
-                31,
-                SelfTradeBehavior::Abort,
-                None,
-                rng.gen::<u128>(),
-                false,
-            ),
-            &mut record_event_fn,
-        )
-        .is_none());
-    assert!(market
-        .place_order(
-            &taker,
-            OrderPacket::new_fok_sell_with_limit_price(
-                97,
-                31,
-                SelfTradeBehavior::Abort,
-                None,
-                rng.gen::<u128>(),
-                false,
-            ),
-            &mut record_event_fn,
-        )
-        .is_none());
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
 
-    assert!(
-        market
-            .place_order(
-                &taker,
-                OrderPacket::new_ioc(
-                    Side::Bid,
-                    None,
-                    100,
-                    1,
-                    0,
-                    0,
-                    SelfTradeBehavior::Abort,
-                    None,
-                    rng.gen::<u128>(),
-                    false,
-                ),
-                &mut record_event_fn,
-            )
-            .is_none(),
-        "Only one of num_base_lots or num_quote_lots should be set"
-    );
-
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
 
     // (2) FOK should fail if the tick/lot budget is not enough to fill the order (changed price limit)
     assert!(market
@@ -1167,9 +1124,19 @@ fn test_fok_and_ioc_limit() {
             &mut record_event_fn,
         )
         .is_none());
+}
 
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+#[test]
+fn test_fok_and_ioc_limit_3() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
 
     // (3) IOC should succeed if the tick/lot budget is not enough to fill the order (same params as 1)
     let (o, matching_engine_response) = market
@@ -1223,8 +1190,19 @@ fn test_fok_and_ioc_limit() {
                     / market.base_lots_per_base_unit,
             )
     );
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+}
+
+#[test]
+fn test_fok_and_ioc_limit_4() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
 
     // (4) IOC should succeed if the tick/lot budget is not enough to fill the order (same params as 2)
     let (o, matching_engine_response) = market
@@ -1290,6 +1268,70 @@ fn test_fok_and_ioc_limit() {
     );
 }
 
+#[test]
+fn test_fok_and_ioc_limit_5() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
+    // (1) FOK should fail if the base lot budget is not enough to fill the order (changed tick limit)
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                103,
+                31,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+        )
+        .is_none());
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                97,
+                31,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+        )
+        .is_none());
+
+    assert!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    1,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                ),
+                &mut record_event_fn,
+            )
+            .is_none(),
+        "Only one of num_base_lots or num_quote_lots should be set"
+    );
+}
+
 // Base lots = (quote lots * base lots per base unit) / (tick size in quote lots per base unit * price in ticks)
 // Then adjust for fees.
 fn get_min_base_lots_out(
@@ -1320,7 +1362,7 @@ fn get_min_quote_lots_out(
 }
 
 #[test]
-fn test_fok_with_slippage() {
+fn test_fok_with_slippage_1() {
     let mut rng = StdRng::seed_from_u64(2);
     let taker_bps = 5;
     let mut market = Box::new(setup_market_with_params(1000_u64, 1000_u64, taker_bps));
@@ -1348,7 +1390,6 @@ fn test_fok_with_slippage() {
             .is_some());
     }
 
-    let prev_market_state = Box::new(*market);
     let starting_ladder = market.get_typed_ladder(5);
 
     assert!(starting_ladder.asks[2].price_in_ticks == Ticks::new(103));
@@ -1421,11 +1462,35 @@ fn test_fok_with_slippage() {
     }
     assert!(ladder.asks[0].price_in_ticks == prev_ladder.asks[0].price_in_ticks);
     assert!(ladder.asks[0].size_in_base_lots == prev_ladder.asks[0].size_in_base_lots);
+}
 
+#[test]
+fn test_fok_with_slippage_2() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let taker_bps = 5;
+    let mut market = Box::new(setup_market_with_params(1000_u64, 1000_u64, taker_bps));
     let mut event_recorder = VecDeque::new();
     let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    for i in 1..11 {
+        assert!(market
+            .place_order(
+                &trader,
+                OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10000 * i),
+                &mut record_event_fn,
+            )
+            .is_some());
+        assert!(market
+            .place_order(
+                &trader,
+                OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10000 * i),
+                &mut record_event_fn,
+            )
+            .is_some());
+    }
 
     // Show that the order is rejected if the slippage is too high
     assert!(market
@@ -1442,11 +1507,38 @@ fn test_fok_with_slippage() {
             &mut record_event_fn,
         )
         .is_none());
+}
 
+#[test]
+fn test_fok_with_slippage_3() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let taker_bps = 5;
+    let mut market = Box::new(setup_market_with_params(1000_u64, 1000_u64, taker_bps));
+    let base_lots_per_base_unit = market.base_lots_per_base_unit;
     let mut event_recorder = VecDeque::new();
     let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
-    *market = *prev_market_state;
-    assert!(market.get_typed_ladder(5) == starting_ladder);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    for i in 1..11 {
+        assert!(market
+            .place_order(
+                &trader,
+                OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10000 * i),
+                &mut record_event_fn,
+            )
+            .is_some());
+        assert!(market
+            .place_order(
+                &trader,
+                OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10000 * i),
+                &mut record_event_fn,
+            )
+            .is_some());
+    }
+
+    let starting_ladder = market.get_typed_ladder(5);
     // Performs a swap sell order with a slippage of at most 28bps
     let target_bps = 28;
     let base_lots_in = BaseUnits::new(50) * base_lots_per_base_unit;
@@ -1696,8 +1788,7 @@ fn test_reduce_order() {
     let maker = rng.gen::<u128>();
     let mut event_recorder = VecDeque::new();
 
-    let mut client_ids = vec![];
-    client_ids.push(rng.gen::<u128>());
+    let client_ids = vec![rng.gen::<u128>()];
     let order_packet = OrderPacket::new_post_only_default_with_client_order_id(
         Side::Bid,
         1000,

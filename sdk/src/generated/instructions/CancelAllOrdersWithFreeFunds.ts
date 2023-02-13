@@ -25,7 +25,7 @@ export const CancelAllOrdersWithFreeFundsStruct = new beet.BeetArgsStruct<{
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @category Instructions
  * @category CancelAllOrdersWithFreeFunds
  * @category generated
@@ -49,7 +49,7 @@ export const cancelAllOrdersWithFreeFundsInstructionDiscriminator = 7
  */
 export function createCancelAllOrdersWithFreeFundsInstruction(
   accounts: CancelAllOrdersWithFreeFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = CancelAllOrdersWithFreeFundsStruct.serialize({
     instructionDiscriminator:
@@ -73,7 +73,7 @@ export function createCancelAllOrdersWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
   ]

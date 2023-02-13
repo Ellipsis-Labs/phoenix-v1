@@ -35,7 +35,7 @@ createErrorFromNameLookup.set(
 )
 
 /**
- * InvalidMarketAuthority: 'Invalid market authority error'
+ * InvalidMarketAuthority: 'Invalid exchange authority error'
  *
  * @category Errors
  * @category generated
@@ -44,7 +44,7 @@ export class InvalidMarketAuthorityError extends Error {
   readonly code: number = 0x1
   readonly name: string = 'InvalidMarketAuthority'
   constructor() {
-    super('Invalid market authority error')
+    super('Invalid exchange authority error')
     if (typeof Error.captureStackTrace === 'function') {
       Error.captureStackTrace(this, InvalidMarketAuthorityError)
     }

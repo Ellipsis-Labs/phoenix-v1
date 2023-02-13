@@ -49,7 +49,7 @@ export const requestSeatInstructionDiscriminator = 14
  */
 export function createRequestSeatInstruction(
   accounts: RequestSeatInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = RequestSeatStruct.serialize({
     instructionDiscriminator: requestSeatInstructionDiscriminator,

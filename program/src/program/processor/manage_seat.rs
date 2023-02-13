@@ -1,8 +1,7 @@
 use crate::program::{
-    dispatch_market::load_with_dispatch_mut, error::assert_with_msg, get_discriminant,
-    loaders::get_seat_address, status::SeatApprovalStatus, system_utils::create_account,
-    AuthorizedSeatRequestContext, MarketHeader, ModifySeatContext, PhoenixMarketContext,
-    RequestSeatContext, Seat,
+    dispatch_market::load_with_dispatch_mut, error::assert_with_msg, loaders::get_seat_address,
+    status::SeatApprovalStatus, system_utils::create_account, AuthorizedSeatRequestContext,
+    MarketHeader, ModifySeatContext, PhoenixMarketContext, RequestSeatContext, Seat,
 };
 use borsh::BorshDeserialize;
 use sokoban::node_allocator::ZeroCopy;
@@ -89,12 +88,8 @@ fn _create_seat<'a, 'info>(
         seeds,
     )?;
     let mut seat_bytes = seat.try_borrow_mut_data()?;
-    *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? = Seat {
-        discriminant: get_discriminant::<Seat>()?,
-        market: *market_key,
-        trader: *trader,
-        approval_status: SeatApprovalStatus::NotApproved as u64,
-    };
+    *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? =
+        Seat::new_init(*market_key, *trader)?;
     Ok(())
 }
 

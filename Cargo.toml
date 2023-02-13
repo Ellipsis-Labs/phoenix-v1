@@ -12,7 +12,6 @@ overflow-checks = true
 [workspace.dependencies]
 spl-token = { version = "3.2.0", features = ["no-entrypoint"] }
 spl-associated-token-account = { version = "1.1.1", features = [ "no-entrypoint" ] } 
-shank = "0.0.9"
 solana-program = "=1.14.9"
 solana-sdk = "=1.14.9"
 solana-test-client = "0.1.0" 
@@ -20,9 +19,12 @@ borsh = "0.9.3"
 bytemuck = "1.11.0"
 lib-sokoban = "0.2.4" 
 rand = "0.7.3"
-ellipsis-client = "=0.1.10"
+ellipsis-client = "=0.1.15"
 tokio = { version = "1.8.4", features = ["full"] }
 num_enum = "^0.5.1"
-phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "6a2e629" }
+phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "cb79d23" }
 itertools = "0.10.5"
 thiserror = "^1.0.24"
+ellipsis-macros = "0.1.1" 
+solana-security-txt = "1.1.0"
+static_assertions = "0.1.1"

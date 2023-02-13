@@ -57,7 +57,7 @@ export const initializeMarketInstructionDiscriminator = 100
  */
 export function createInitializeMarketInstruction(
   accounts: InitializeMarketInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = InitializeMarketStruct.serialize({
     instructionDiscriminator: initializeMarketInstructionDiscriminator,

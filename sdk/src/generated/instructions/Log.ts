@@ -40,7 +40,7 @@ export const logInstructionDiscriminator = 15
  */
 export function createLogInstruction(
   accounts: LogInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = LogStruct.serialize({
     instructionDiscriminator: logInstructionDiscriminator,

@@ -46,7 +46,7 @@ export const nameSuccessorInstructionDiscriminator = 102
  */
 export function createNameSuccessorInstruction(
   accounts: NameSuccessorInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = NameSuccessorStruct.serialize({
     instructionDiscriminator: nameSuccessorInstructionDiscriminator,

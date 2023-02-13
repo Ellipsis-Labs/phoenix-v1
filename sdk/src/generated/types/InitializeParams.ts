@@ -16,20 +16,23 @@ export type InitializeParams = {
   numBaseLotsPerBaseUnit: beet.bignum
   takerFeeBps: number
   feeCollector: web3.PublicKey
+  rawBaseUnitsPerBaseUnit: beet.COption<number>
 }
 
 /**
  * @category userTypes
  * @category generated
  */
-export const initializeParamsBeet = new beet.BeetArgsStruct<InitializeParams>(
-  [
-    ['marketSizeParams', marketSizeParamsBeet],
-    ['numQuoteLotsPerQuoteUnit', beet.u64],
-    ['tickSizeInQuoteLotsPerBaseUnit', beet.u64],
-    ['numBaseLotsPerBaseUnit', beet.u64],
-    ['takerFeeBps', beet.u16],
-    ['feeCollector', beetSolana.publicKey],
-  ],
-  'InitializeParams'
-)
+export const initializeParamsBeet =
+  new beet.FixableBeetArgsStruct<InitializeParams>(
+    [
+      ['marketSizeParams', marketSizeParamsBeet],
+      ['numQuoteLotsPerQuoteUnit', beet.u64],
+      ['tickSizeInQuoteLotsPerBaseUnit', beet.u64],
+      ['numBaseLotsPerBaseUnit', beet.u64],
+      ['takerFeeBps', beet.u16],
+      ['feeCollector', beetSolana.publicKey],
+      ['rawBaseUnitsPerBaseUnit', beet.coption(beet.u32)],
+    ],
+    'InitializeParams'
+  )

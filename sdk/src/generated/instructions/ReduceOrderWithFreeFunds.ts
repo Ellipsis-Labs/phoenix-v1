@@ -7,16 +7,33 @@
 
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import {
+  ReduceOrderParams,
+  reduceOrderParamsBeet,
+} from '../types/ReduceOrderParams'
 
 /**
  * @category Instructions
  * @category ReduceOrderWithFreeFunds
  * @category generated
  */
-export const ReduceOrderWithFreeFundsStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>(
-  [['instructionDiscriminator', beet.u8]],
+export type ReduceOrderWithFreeFundsInstructionArgs = {
+  params: ReduceOrderParams
+}
+/**
+ * @category Instructions
+ * @category ReduceOrderWithFreeFunds
+ * @category generated
+ */
+export const ReduceOrderWithFreeFundsStruct = new beet.BeetArgsStruct<
+  ReduceOrderWithFreeFundsInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['params', reduceOrderParamsBeet],
+  ],
   'ReduceOrderWithFreeFundsInstructionArgs'
 )
 /**
@@ -43,16 +60,20 @@ export const reduceOrderWithFreeFundsInstructionDiscriminator = 5
  * Creates a _ReduceOrderWithFreeFunds_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category ReduceOrderWithFreeFunds
  * @category generated
  */
 export function createReduceOrderWithFreeFundsInstruction(
   accounts: ReduceOrderWithFreeFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: ReduceOrderWithFreeFundsInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = ReduceOrderWithFreeFundsStruct.serialize({
     instructionDiscriminator: reduceOrderWithFreeFundsInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {

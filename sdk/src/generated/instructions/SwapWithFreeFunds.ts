@@ -7,22 +7,39 @@
 
 import * as beet from '@metaplex-foundation/beet'
 import * as web3 from '@solana/web3.js'
+import { OrderPacket, orderPacketBeet } from '../types/OrderPacket'
 
 /**
  * @category Instructions
  * @category SwapWithFreeFunds
  * @category generated
  */
-export const SwapWithFreeFundsStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number
-}>([['instructionDiscriminator', beet.u8]], 'SwapWithFreeFundsInstructionArgs')
+export type SwapWithFreeFundsInstructionArgs = {
+  orderPacket: OrderPacket
+}
+/**
+ * @category Instructions
+ * @category SwapWithFreeFunds
+ * @category generated
+ */
+export const SwapWithFreeFundsStruct = new beet.FixableBeetArgsStruct<
+  SwapWithFreeFundsInstructionArgs & {
+    instructionDiscriminator: number
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.u8],
+    ['orderPacket', orderPacketBeet],
+  ],
+  'SwapWithFreeFundsInstructionArgs'
+)
 /**
  * Accounts required by the _SwapWithFreeFunds_ instruction
  *
  * @property [] phoenixProgram Phoenix program
  * @property [] logAuthority Phoenix log authority
  * @property [_writable_] market This account holds the market state
- * @property [_writable_, **signer**] trader
+ * @property [**signer**] trader
  * @property [] seat
  * @category Instructions
  * @category SwapWithFreeFunds
@@ -42,16 +59,20 @@ export const swapWithFreeFundsInstructionDiscriminator = 1
  * Creates a _SwapWithFreeFunds_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category SwapWithFreeFunds
  * @category generated
  */
 export function createSwapWithFreeFundsInstruction(
   accounts: SwapWithFreeFundsInstructionAccounts,
-  programId = new web3.PublicKey('PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY')
+  args: SwapWithFreeFundsInstructionArgs,
+  programId = new web3.PublicKey('phnxNHfGNVjpVVuHkceK3MgwZ1bW25ijfWACKhVFbBH')
 ) {
   const [data] = SwapWithFreeFundsStruct.serialize({
     instructionDiscriminator: swapWithFreeFundsInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
@@ -71,7 +92,7 @@ export function createSwapWithFreeFundsInstruction(
     },
     {
       pubkey: accounts.trader,
-      isWritable: true,
+      isWritable: false,
       isSigner: true,
     },
     {
