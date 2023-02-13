@@ -29,11 +29,12 @@ num_enum = { workspace = true }
 thiserror = { workspace = true } 
 borsh = { workspace = true }
 itertools = { workspace = true }
-ellipsis-macros = "0.1.1" 
+static_assertions = { workspace = true } 
+ellipsis-macros = { workspace = true } 
+solana-security-txt = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
-solana-test-client = { workspace = true } 
 solana-sdk = { workspace = true }
 tokio = { workspace = true }
 ellipsis-client = { workspace = true }

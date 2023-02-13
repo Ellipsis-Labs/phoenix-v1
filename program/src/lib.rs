@@ -14,9 +14,9 @@
 
 #[macro_use]
 mod log;
-// Note this mod is private and only exists for the purposes of IDL generation
 pub mod program;
 pub mod quantities;
+// Note this mod is private and only exists for the purposes of IDL generation
 mod shank_structs;
 pub mod state;
 
@@ -36,6 +36,22 @@ use solana_program::{
     program_error::ProgramError,
 };
 use state::markets::MarketEvent;
+
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    // Required fields
+    name: "Phoenix V1",
+    project_url: "https://ellipsislabs.xyz/",
+    contacts: "email:maintainers@ellipsislabs.xyz",
+    policy: "https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/SECURITY.md",
+    // Optional Fields
+    preferred_languages: "en",
+    source_code: "https://github.com/Ellipsis-Labs/phoenix-v1",
+    auditors: "contact@osec.io"
+}
 
 declare_id!("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY");
 

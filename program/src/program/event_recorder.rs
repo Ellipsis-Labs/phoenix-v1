@@ -149,7 +149,7 @@ impl<'info> EventRecorder<'info> {
         }
         // By serialzing into an existing buffer, we avoid allocating a new vector
         let mut event = PhoenixMarketEvent::from(event);
-        event.set_index(self.state_tracker.events_added as u16);
+        event.set_index(self.state_tracker.events_added);
 
         // This should always be false, but we check just in case
         if !self.scratch_buffer.is_empty() {

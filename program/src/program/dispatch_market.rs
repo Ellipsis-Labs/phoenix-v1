@@ -7,6 +7,28 @@ use crate::state::OrderPacket;
 use sokoban::node_allocator::ZeroCopy;
 use solana_program::{program_error::ProgramError, pubkey::Pubkey};
 
+macro_rules! fifo_market_mut {
+    ($num_bids:literal, $num_asks:literal, $num_seats:literal, $bytes:expr) => {
+        FIFOMarket::<Pubkey, $num_bids, $num_asks, $num_seats>::load_mut_bytes($bytes)
+            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
+            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>
+    };
+}
+
+macro_rules! fifo_market {
+    ($num_bids:literal, $num_asks:literal, $num_seats:literal, $bytes:expr) => {
+        FIFOMarket::<Pubkey, $num_bids, $num_asks, $num_seats>::load_bytes($bytes)
+            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
+            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>
+    };
+}
+
+macro_rules! fifo_market_size {
+    ($num_bids:literal, $num_asks:literal, $num_seats:literal) => {
+        std::mem::size_of::<FIFOMarket<Pubkey, $num_bids, $num_asks, $num_seats>>()
+    };
+}
+
 pub fn load_with_dispatch_mut<'a>(
     market_size_params: &'a MarketSizeParams,
     bytes: &'a mut [u8],
@@ -35,24 +57,14 @@ pub fn dispatch_market_mut<'a>(
         num_seats,
     } = market_size_params;
     let market = match (bids_size, asks_size, num_seats) {
-        (512, 512, 256) => FIFOMarket::<Pubkey, 512, 512, 256>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (2048, 2048, 4096) => FIFOMarket::<Pubkey, 2048, 2048, 4096>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (4096, 4096, 8192) => FIFOMarket::<Pubkey, 4096, 4096, 8192>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (1024, 1024, 128) => FIFOMarket::<Pubkey, 1024, 1024, 128>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (2048, 2048, 128) => FIFOMarket::<Pubkey, 2048, 2048, 128>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (4096, 4096, 128) => FIFOMarket::<Pubkey, 4096, 4096, 128>::load_mut_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
+        (512, 512, 128) => fifo_market_mut!(512, 512, 128, bytes),
+        (512, 512, 1024) => fifo_market_mut!(512, 512, 1024, bytes),
+        (1024, 1024, 128) => fifo_market_mut!(1024, 1024, 128, bytes),
+        (1024, 1024, 2048) => fifo_market_mut!(1024, 1024, 2048, bytes),
+        (2048, 2048, 128) => fifo_market_mut!(2048, 2048, 128, bytes),
+        (2048, 2048, 4096) => fifo_market_mut!(2048, 2048, 4096, bytes),
+        (4096, 4096, 128) => fifo_market_mut!(4096, 4096, 128, bytes),
+        (4096, 4096, 8192) => fifo_market_mut!(4096, 4096, 8192, bytes),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
@@ -90,24 +102,14 @@ fn dispatch_market<'a>(
         market_size_params.asks_size,
         market_size_params.num_seats,
     ) {
-        (512, 512, 256) => FIFOMarket::<Pubkey, 512, 512, 256>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (2048, 2048, 4096) => FIFOMarket::<Pubkey, 2048, 2048, 4096>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (4096, 4096, 8192) => FIFOMarket::<Pubkey, 4096, 4096, 8192>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (1024, 1024, 128) => FIFOMarket::<Pubkey, 1024, 1024, 128>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (2048, 2048, 128) => FIFOMarket::<Pubkey, 2048, 2048, 128>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
-        (4096, 4096, 128) => FIFOMarket::<Pubkey, 4096, 4096, 128>::load_bytes(bytes)
-            .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
+        (512, 512, 128) => fifo_market!(512, 512, 128, bytes),
+        (512, 512, 1024) => fifo_market!(512, 512, 1024, bytes),
+        (1024, 1024, 128) => fifo_market!(1024, 1024, 128, bytes),
+        (1024, 1024, 2048) => fifo_market!(1024, 1024, 2048, bytes),
+        (2048, 2048, 128) => fifo_market!(2048, 2048, 128, bytes),
+        (2048, 2048, 4096) => fifo_market!(2048, 2048, 4096, bytes),
+        (4096, 4096, 128) => fifo_market!(4096, 4096, 128, bytes),
+        (4096, 4096, 8192) => fifo_market!(4096, 4096, 8192, bytes),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
@@ -128,16 +130,58 @@ pub fn get_market_size(market_size_params: &MarketSizeParams) -> Result<usize, P
         num_seats,
     } = market_size_params;
     let size = match (bids_size, asks_size, num_seats) {
-        (512, 512, 256) => std::mem::size_of::<FIFOMarket<Pubkey, 512, 512, 256>>(),
-        (2048, 2048, 4096) => std::mem::size_of::<FIFOMarket<Pubkey, 2048, 2048, 4096>>(),
-        (4096, 4096, 8192) => std::mem::size_of::<FIFOMarket<Pubkey, 4096, 4096, 8192>>(),
-        (1024, 1024, 128) => std::mem::size_of::<FIFOMarket<Pubkey, 1024, 1024, 128>>(),
-        (2048, 2048, 128) => std::mem::size_of::<FIFOMarket<Pubkey, 2048, 2048, 128>>(),
-        (4096, 4096, 128) => std::mem::size_of::<FIFOMarket<Pubkey, 4096, 4096, 128>>(),
+        (512, 512, 128) => fifo_market_size!(512, 512, 128),
+        (512, 512, 1024) => fifo_market_size!(512, 512, 1024),
+        (1024, 1024, 128) => fifo_market_size!(1024, 1024, 128),
+        (1024, 1024, 2048) => fifo_market_size!(1024, 1024, 2048),
+        (2048, 2048, 128) => fifo_market_size!(2048, 2048, 128),
+        (2048, 2048, 4096) => fifo_market_size!(2048, 2048, 4096),
+        (4096, 4096, 128) => fifo_market_size!(4096, 4096, 128),
+        (4096, 4096, 8192) => fifo_market_size!(4096, 4096, 8192),
         _ => {
             phoenix_log!("Invalid parameters for market");
             return Err(PhoenixError::InvalidMarketParameters.into());
         }
     };
     Ok(size)
+}
+
+#[test]
+fn test_market_size() {
+    use solana_program::rent::Rent;
+    let valid_configs = [
+        (512, 512, 128),
+        (512, 512, 1024),
+        (1024, 1024, 128),
+        (1024, 1024, 2048),
+        (2048, 2048, 128),
+        (2048, 2048, 4096),
+        (4096, 4096, 128),
+        (4096, 4096, 8192),
+    ];
+    for (bids_size, asks_size, num_seats) in valid_configs.into_iter() {
+        let market_size_params = MarketSizeParams {
+            bids_size,
+            asks_size,
+            num_seats,
+        };
+        if let Ok(size) = get_market_size(&market_size_params) {
+            println!(
+                "({} {} {}) {} bytes, {} rent (SOL)",
+                bids_size,
+                asks_size,
+                num_seats,
+                size,
+                Rent::default().minimum_balance(size) as f64 / 1e9
+            );
+        } else {
+            panic!("Invalid market size params")
+        }
+    }
+    assert!(get_market_size(&MarketSizeParams {
+        bids_size: 1234,
+        asks_size: 89345,
+        num_seats: 2134
+    })
+    .is_err());
 }

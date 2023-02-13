@@ -1,3 +1,4 @@
+use ellipsis_client::program_test::*;
 use ellipsis_client::EllipsisClient;
 use phoenix::phoenix_log_authority;
 use phoenix::program::deposit::DepositParams;
@@ -24,13 +25,12 @@ use phoenix_sdk::sdk_client::SDKClient;
 
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signer};
-use solana_test_client::program_test::*;
 
 pub mod helpers;
 use crate::helpers::*;
 
-const BOOK_SIZE: usize = 2048;
-const NUM_SEATS: usize = 128;
+const BOOK_SIZE: usize = 4096;
+const NUM_SEATS: usize = 8192;
 
 pub struct PhoenixTestAccount {
     pub user: Keypair,
@@ -108,7 +108,19 @@ async fn get_token_balance(client: &EllipsisClient, ata: Pubkey) -> u64 {
     get_token_account(client, &ata).await.unwrap().amount
 }
 
-async fn bootstrap(fee_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
+async fn bootstrap_default(fees_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
+    bootstrap_with_parameters(100_000, 1_000, 1_000, 9, 6, fees_bps, None).await
+}
+
+async fn bootstrap_with_parameters(
+    num_quote_lots_per_quote_unit: u64,
+    num_base_lots_per_base_unit: u64,
+    tick_size_in_quote_lots_per_base_unit: u64,
+    base_decimals: u8,
+    quote_decimals: u8,
+    fee_bps: u16,
+    raw_base_units_per_base_unit: Option<u32>,
+) -> (PhoenixTestClient, PhoenixTestContext) {
     let context = phoenix_test().start_with_context().await;
     let mut ellipsis_client = EllipsisClient::from_banks(&context.banks_client, &context.payer)
         .await
@@ -127,7 +139,6 @@ async fn bootstrap(fee_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
 
     // create base and quote token mints
     let base_mint = Keypair::new();
-    let base_decimals = 9;
     create_mint(
         &ellipsis_client,
         &authority.pubkey(),
@@ -138,7 +149,6 @@ async fn bootstrap(fee_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
     .await
     .unwrap();
 
-    let quote_decimals = 6;
     let quote_mint = Keypair::new();
     create_mint(
         &ellipsis_client,
@@ -179,10 +189,6 @@ async fn bootstrap(fee_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
     .await
     .unwrap();
 
-    let num_quote_lots_per_quote_unit = 100000;
-    let num_base_lots_per_base_unit = 1000;
-    let tick_size_in_quote_lots_per_base_unit = 1000;
-
     let mut init_instructions = vec![];
 
     init_instructions.extend_from_slice(
@@ -196,6 +202,7 @@ async fn bootstrap(fee_bps: u16) -> (PhoenixTestClient, PhoenixTestContext) {
             num_base_lots_per_base_unit,
             tick_size_in_quote_lots_per_base_unit,
             fee_bps,
+            raw_base_units_per_base_unit,
         )
         .unwrap(),
     );
@@ -300,7 +307,7 @@ async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> Phoenix
 
 #[tokio::test]
 async fn test_phoenix_request_seats() {
-    let (phoenix_client, phoenix_ctx) = bootstrap(0).await;
+    let (phoenix_client, phoenix_ctx) = bootstrap_default(0).await;
     let PhoenixTestClient { mut ctx, sdk, .. } = phoenix_client;
     let PhoenixTestContext { mint_authority, .. } = &phoenix_ctx;
 
@@ -472,8 +479,8 @@ async fn test_phoenix_request_seats() {
                 market,
                 &maker1.pubkey(),
                 &sdk.client.payer.pubkey(),
-                &base_mint,
-                &quote_mint,
+                base_mint,
+                quote_mint,
             ),
             vec![],
         )
@@ -506,7 +513,7 @@ async fn get_sequence_number(client: &EllipsisClient, market: &Pubkey) -> u64 {
 
 #[tokio::test]
 async fn test_phoenix_orders() {
-    let (phoenix_client, ctx) = bootstrap(0).await;
+    let (phoenix_client, ctx) = bootstrap_default(0).await;
     let PhoenixTestClient { ctx: _, sdk, .. } = phoenix_client;
 
     let PhoenixTestContext { default_maker, .. } = &ctx;
@@ -744,10 +751,7 @@ async fn test_phoenix_orders() {
 
     // maker receives quote tokens
     assert_eq!(base_end, 1000000000000000);
-    assert_eq!(
-        quote_end,
-        quote_start + sdk.quote_lots_to_quote_amount(9900)
-    );
+    assert_eq!(quote_end, quote_start + sdk.quote_lots_to_quote_atoms(9900));
 }
 
 #[tokio::test]
@@ -757,7 +761,7 @@ async fn test_phoenix_cancel_all_orders() {
             ctx: _, mut sdk, ..
         },
         phoenix_ctx,
-    ) = bootstrap(0).await;
+    ) = bootstrap_default(0).await;
     let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
     let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
@@ -848,7 +852,7 @@ async fn test_phoenix_admin() {
             default_taker,
             ..
         },
-    ) = bootstrap(5).await;
+    ) = bootstrap_default(5).await;
     let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
@@ -1273,7 +1277,7 @@ async fn test_phoenix_admin() {
 
 #[tokio::test]
 async fn test_phoenix_basic() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap(0).await;
+    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
@@ -1290,8 +1294,8 @@ async fn test_phoenix_basic() {
         sdk.float_price_to_ticks(40.0),
         sdk.float_price_to_ticks(36.0),
         sdk.float_price_to_ticks(0.05),
-        sdk.base_units_to_base_lots(1.0),
-        sdk.base_units_to_base_lots(0.5),
+        sdk.raw_base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(0.5),
         Side::Bid,
     )
     .await;
@@ -1301,8 +1305,8 @@ async fn test_phoenix_basic() {
         sdk.float_price_to_ticks(40.01),
         sdk.float_price_to_ticks(45.5),
         sdk.float_price_to_ticks(0.05),
-        sdk.base_units_to_base_lots(1.2),
-        sdk.base_units_to_base_lots(0.3),
+        sdk.raw_base_units_to_base_lots(1.2),
+        sdk.raw_base_units_to_base_lots(0.3),
         Side::Ask,
     )
     .await;
@@ -1311,7 +1315,7 @@ async fn test_phoenix_basic() {
     let params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
         sdk.float_price_to_ticks(39.7),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::Abort,
         None,
         sdk.get_next_client_order_id(),
@@ -1459,7 +1463,7 @@ async fn test_phoenix_basic() {
 
 #[tokio::test]
 async fn test_phoenix_fees() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap(5).await;
+    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(5).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
@@ -1515,13 +1519,8 @@ async fn test_phoenix_fees() {
     println!("taker balance change {}", taker_diff);
     sdk.client.set_payer(&admin.pubkey()).unwrap();
 
-    let new_fee_recipient = setup_account(
-        &sdk.client,
-        &mint_authority,
-        sdk.base_mint.clone(),
-        sdk.quote_mint.clone(),
-    )
-    .await;
+    let new_fee_recipient =
+        setup_account(&sdk.client, mint_authority, sdk.base_mint, sdk.quote_mint).await;
 
     let change_fee_recipient_ix = create_change_fee_recipient_instruction(
         &admin.pubkey(),
@@ -1559,7 +1558,7 @@ async fn test_phoenix_fees() {
         quote_mint,
     );
     let fee_ata = get_associated_token_address(&new_fee_recipient.user.pubkey(), quote_mint);
-    let fee_dest_start = get_token_balance(&sdk.client, fee_ata.clone()).await;
+    let fee_dest_start = get_token_balance(&sdk.client, fee_ata).await;
     let quote_vault = get_vault_address(&sdk.core.active_market_key, quote_mint).0;
     let quote_balance_start = get_token_balance(&sdk.client, quote_vault).await;
 
@@ -1613,13 +1612,13 @@ async fn test_phoenix_fees() {
 
 #[tokio::test]
 async fn test_phoenix_cancel_with_free_funds() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap(0).await;
+    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext { default_maker, .. } = &ctx;
     let meta = *sdk.get_active_market_metadata();
     let market = sdk.active_market_key;
     sdk.client.set_payer(&default_maker.user.pubkey()).unwrap();
     let quote_lots_to_deposit = sdk.quote_units_to_quote_lots(10000.0);
-    let base_lots_to_deposit = sdk.base_units_to_base_lots(100.0);
+    let base_lots_to_deposit = sdk.raw_base_units_to_base_lots(100.0);
     let params = DepositParams {
         quote_lots_to_deposit,
         base_lots_to_deposit,
@@ -1780,7 +1779,7 @@ async fn test_phoenix_cancel_with_free_funds() {
 
 #[tokio::test]
 async fn test_phoenix_orders_with_free_funds() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap(0).await;
+    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
@@ -1802,8 +1801,8 @@ async fn test_phoenix_orders_with_free_funds() {
         sdk.float_price_to_ticks(40.0),
         sdk.float_price_to_ticks(30.0),
         sdk.float_price_to_ticks(1.0),
-        sdk.base_units_to_base_lots(1.0),
-        sdk.base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(1.0),
         Side::Bid,
     )
     .await;
@@ -1813,8 +1812,8 @@ async fn test_phoenix_orders_with_free_funds() {
         sdk.float_price_to_ticks(50.0),
         sdk.float_price_to_ticks(60.0),
         sdk.float_price_to_ticks(1.0),
-        sdk.base_units_to_base_lots(1.0),
-        sdk.base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(1.0),
         Side::Ask,
     )
     .await;
@@ -1824,7 +1823,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
         sdk.float_price_to_ticks(31.0),
-        sdk.base_units_to_base_lots(55.0),
+        sdk.raw_base_units_to_base_lots(55.0),
         SelfTradeBehavior::Abort,
         None,
         sdk.get_next_client_order_id(),
@@ -1847,7 +1846,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
         sdk.float_price_to_ticks(31.0),
-        sdk.base_units_to_base_lots(55.0),
+        sdk.raw_base_units_to_base_lots(55.0),
         SelfTradeBehavior::Abort,
         None,
         sdk.get_next_client_order_id(),
@@ -1857,7 +1856,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let buy_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
         sdk.float_price_to_ticks(59.0),
-        sdk.base_units_to_base_lots(55.0),
+        sdk.raw_base_units_to_base_lots(55.0),
         SelfTradeBehavior::Abort,
         None,
         sdk.get_next_client_order_id(),
@@ -1867,7 +1866,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let self_trade_bid_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
         sdk.float_price_to_ticks(30.0),
-        sdk.base_units_to_base_lots(11.0),
+        sdk.raw_base_units_to_base_lots(11.0),
         SelfTradeBehavior::DecrementTake,
         None,
         sdk.get_next_client_order_id(),
@@ -1877,7 +1876,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let self_trade_offer_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
         sdk.float_price_to_ticks(60.0),
-        sdk.base_units_to_base_lots(11.0),
+        sdk.raw_base_units_to_base_lots(11.0),
         SelfTradeBehavior::DecrementTake,
         None,
         sdk.get_next_client_order_id(),
@@ -1932,7 +1931,7 @@ async fn test_phoenix_orders_with_free_funds() {
         &OrderPacket::new_post_only_default(
             Side::Bid,
             sdk.float_price_to_ticks(100.0),
-            sdk.base_units_to_base_lots(10.0),
+            sdk.raw_base_units_to_base_lots(10.0),
         ),
     );
     assert!(sdk
@@ -1945,19 +1944,19 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order_default(
         Side::Bid,
         sdk.float_price_to_ticks(30.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
     );
 
     let limit_sell_params = OrderPacket::new_limit_order_default(
         Side::Ask,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
     );
 
     let ioc_buy_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         sdk.get_next_client_order_id(),
@@ -1967,7 +1966,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let ioc_sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
         sdk.float_price_to_ticks(30.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         sdk.get_next_client_order_id(),
@@ -2012,13 +2011,13 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order_default(
         Side::Bid,
         sdk.float_price_to_ticks(33.69),
-        sdk.base_units_to_base_lots(101.0),
+        sdk.raw_base_units_to_base_lots(101.0),
     );
 
     let limit_sell_params = OrderPacket::new_limit_order_default(
         Side::Ask,
         sdk.float_price_to_ticks(50.0),
-        sdk.base_units_to_base_lots(67.0),
+        sdk.raw_base_units_to_base_lots(67.0),
     );
 
     let maker_params = vec![limit_buy_params, limit_sell_params];
@@ -2055,7 +2054,7 @@ async fn test_phoenix_orders_with_free_funds() {
         &OrderPacket::new_ioc_by_lots(
             Side::Bid,
             sdk.float_price_to_ticks(250.0),
-            sdk.base_units_to_base_lots(10.0),
+            sdk.raw_base_units_to_base_lots(10.0),
             SelfTradeBehavior::CancelProvide,
             None,
             sdk.get_next_client_order_id(),
@@ -2072,7 +2071,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2082,7 +2081,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
         sdk.float_price_to_ticks(35.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2118,7 +2117,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2128,7 +2127,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
         sdk.float_price_to_ticks(35.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2175,7 +2174,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(5.0),
+        sdk.raw_base_units_to_base_lots(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2185,7 +2184,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
         sdk.float_price_to_ticks(35.0),
-        sdk.base_units_to_base_lots(5.0),
+        sdk.raw_base_units_to_base_lots(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2224,7 +2223,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
-        sdk.base_units_to_base_lots(5.0),
+        sdk.raw_base_units_to_base_lots(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2234,7 +2233,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
         sdk.float_price_to_ticks(35.0),
-        sdk.base_units_to_base_lots(5.0),
+        sdk.raw_base_units_to_base_lots(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2263,7 +2262,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
             mut ctx, mut sdk, ..
         },
         phoenix_ctx,
-    ) = bootstrap(0).await;
+    ) = bootstrap_default(0).await;
 
     let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
 
@@ -2283,21 +2282,21 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(10.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(11.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
     );
@@ -2335,25 +2334,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(10.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(11.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(12.0),
-                sdk.base_units_to_base_lots(4.0),
+                sdk.raw_base_units_to_base_lots(4.0),
             ),
         ],
     );
@@ -2376,25 +2375,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(3.0),
-                sdk.base_units_to_base_lots(1.0),
+                sdk.raw_base_units_to_base_lots(1.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(10.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(11.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
     );
@@ -2416,25 +2415,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(17.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(17.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
             (
                 sdk.float_price_to_ticks(12.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
         ],
     );
@@ -2477,21 +2476,21 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(11.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
     );
@@ -2515,25 +2514,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(29.0),
-                sdk.base_units_to_base_lots(1.0),
+                sdk.raw_base_units_to_base_lots(1.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(19.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(30.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(25.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
     );
@@ -2556,7 +2555,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
         sdk.float_price_to_ticks(10.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2566,7 +2565,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
         sdk.float_price_to_ticks(20.0),
-        sdk.base_units_to_base_lots(10.0),
+        sdk.raw_base_units_to_base_lots(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2592,21 +2591,21 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(8.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(10.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(11.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
     );
@@ -2629,11 +2628,11 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(20.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(9.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![],
@@ -2659,47 +2658,47 @@ async fn test_phoenix_place_multiple_limit_orders() {
         vec![
             (
                 sdk.float_price_to_ticks(5.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(4.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(3.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 sdk.float_price_to_ticks(5.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
             (
                 //this order is all of the extra quote lots we need to deposit
                 sdk.float_price_to_ticks(4.0),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
             (
                 sdk.float_price_to_ticks(100.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
             (
                 sdk.float_price_to_ticks(105.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
             (
                 sdk.float_price_to_ticks(100.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
             (
                 sdk.float_price_to_ticks(103.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
             (
                 //this order is all of the extra base lots we need to deposit
                 sdk.float_price_to_ticks(102.0),
-                sdk.base_units_to_base_lots(5.0),
+                sdk.raw_base_units_to_base_lots(5.0),
             ),
         ],
     );
@@ -2754,7 +2753,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2762,7 +2761,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2793,7 +2792,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2801,7 +2800,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2825,7 +2824,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2833,7 +2832,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2862,7 +2861,7 @@ async fn layer_orders(
     size_step: u64,
     side: Side,
 ) {
-    assert!(price_step > 0 && size_step > 0);
+    assert!(price_step > 0);
     let mut prices = vec![];
     let mut sizes = vec![];
     match side {
@@ -2963,8 +2962,50 @@ async fn test_phoenix_log_authorization() {
 }
 
 #[tokio::test]
+async fn test_phoenix_cancel_all_memory_management() {
+    let (PhoenixTestClient { mut sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
+
+    let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
+
+    sdk.set_payer(clone_keypair(&default_maker.user));
+    layer_orders(
+        &sdk,
+        sdk.float_price_to_ticks(40.0),
+        sdk.float_price_to_ticks(38.0),
+        sdk.float_price_to_ticks(0.01),
+        sdk.raw_base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(0.0),
+        Side::Bid,
+    )
+    .await;
+
+    layer_orders(
+        &sdk,
+        sdk.float_price_to_ticks(40.01),
+        sdk.float_price_to_ticks(42.0),
+        sdk.float_price_to_ticks(0.01),
+        sdk.raw_base_units_to_base_lots(1.0),
+        sdk.raw_base_units_to_base_lots(0.0),
+        Side::Ask,
+    )
+    .await;
+
+    let ix = sdk.get_cancel_all_ix();
+    sdk.client
+        .sign_send_instructions(
+            vec![
+                ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+                ix,
+            ],
+            vec![&default_maker.user],
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn test_phoenix_place_multiple_memory_management() {
-    let (PhoenixTestClient { sdk, .. }, phoenix_ctx) = bootstrap(0).await;
+    let (PhoenixTestClient { sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
 
     let PhoenixTestContext {
         default_maker,
@@ -2976,7 +3017,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(1.0),
+                sdk.raw_base_units_to_base_lots(1.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2984,7 +3025,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         .map(|i| {
             (
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
-                sdk.base_units_to_base_lots(1.0),
+                sdk.raw_base_units_to_base_lots(1.0),
             )
         })
         .collect::<Vec<_>>();
@@ -3003,7 +3044,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         .sign_send_instructions(
             vec![
                 ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
-                new_order_ix,
+                new_order_ix.clone(),
             ],
             vec![&default_maker.user],
         )
@@ -3038,7 +3079,7 @@ async fn test_phoenix_place_multiple_memory_management() {
 
 #[tokio::test]
 async fn test_phoenix_place_multiple_limit_orders_adversarial() {
-    let (PhoenixTestClient { mut sdk, .. }, phoenix_ctx) = bootstrap(0).await;
+    let (PhoenixTestClient { mut sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
 
     let PhoenixTestContext {
         default_maker,
@@ -3114,4 +3155,184 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
         .sign_send_instructions(vec![request_compute_ix, ix], vec![])
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
+    // For tokens whose raw base unit is worth less than one USDC atom, we need to adjust the Phoenix BaseUnit by a multiplicative factor
+    // such that the BaseUnit can be represented by a positive integer of USDC atoms.
+    let raw_base_units_per_base_unit: u64 = 1_000;
+    let tick_size_in_quote_lots_per_base_unit = 10; // base_unit is BaseUnit (adjusted)
+    let base_lot_per_base_unit = 10; // base_unit is BaseUnit (adjusted)
+
+    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_with_parameters(
+        1_000_000,
+        base_lot_per_base_unit,
+        tick_size_in_quote_lots_per_base_unit,
+        5,
+        6,
+        0,
+        Some(raw_base_units_per_base_unit as u32),
+    )
+    .await;
+    let PhoenixTestContext {
+        default_maker,
+        default_taker,
+        ..
+    } = &ctx;
+
+    mint_tokens(
+        &sdk.client,
+        &ctx.mint_authority,
+        &sdk.base_mint,
+        &default_maker.base_ata,
+        1_000_000 * 1e12 as u64,
+        None,
+    )
+    .await
+    .unwrap();
+
+    mint_tokens(
+        &sdk.client,
+        &ctx.mint_authority,
+        &sdk.quote_mint,
+        &default_maker.quote_ata,
+        1_000_000 * 1e9 as u64,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let meta = *sdk.get_active_market_metadata();
+    let quote_mint = &meta.quote_mint;
+    let base_mint = &meta.base_mint;
+
+    sdk.set_payer(clone_keypair(&default_maker.user));
+
+    // Add two layers of bids and two layers of asks
+    let mut layer_ixs: Vec<Instruction> = vec![];
+    let bid_price_range: Vec<f64> = vec![0.000001358, 0.000001359];
+    let ask_price_range: Vec<f64> = vec![0.000001361, 0.000001362];
+
+    for (bid_price, ask_price) in bid_price_range.iter().zip(ask_price_range.iter()) {
+        let bid_params = OrderPacket::new_limit_order(
+            Side::Bid,
+            sdk.float_price_to_ticks(*bid_price),
+            sdk.raw_base_units_to_base_lots(1000 as f64), // 1_000 tokens, or 1_000 raw_base_units
+            SelfTradeBehavior::Abort,
+            None,
+            sdk.get_next_client_order_id(),
+            false,
+        );
+
+        let ask_params = OrderPacket::new_limit_order(
+            Side::Ask,
+            sdk.float_price_to_ticks(*ask_price),
+            sdk.raw_base_units_to_base_lots(1000 as f64), // 1_000 tokens, or 1_000 raw_base_units
+            SelfTradeBehavior::Abort,
+            None,
+            sdk.get_next_client_order_id(),
+            false,
+        );
+
+        let bid_ix = create_new_order_instruction(
+            &sdk.active_market_key,
+            &default_maker.user.pubkey(),
+            base_mint,
+            quote_mint,
+            &bid_params,
+        );
+
+        let ask_ix = create_new_order_instruction(
+            &sdk.active_market_key,
+            &default_maker.user.pubkey(),
+            base_mint,
+            quote_mint,
+            &ask_params,
+        );
+
+        layer_ixs.push(bid_ix);
+        layer_ixs.push(ask_ix);
+    }
+
+    sdk.client
+        .sign_send_instructions(layer_ixs, vec![])
+        .await
+        .unwrap();
+
+    let first_cross_price = sdk.float_price_to_ticks(*bid_price_range.last().unwrap());
+    let first_cross_size = sdk.raw_base_units_to_base_lots(1000 as f64);
+    let second_cross_price = sdk.float_price_to_ticks(*bid_price_range.first().unwrap()); // Takes the last price in the bid price_range (40.0)
+    let second_cross_size = sdk.raw_base_units_to_base_lots(1000 as f64);
+
+    let params = OrderPacket::new_ioc_by_lots(
+        Side::Ask,
+        second_cross_price,
+        first_cross_size + second_cross_size,
+        SelfTradeBehavior::Abort,
+        None,
+        sdk.get_next_client_order_id(),
+        false,
+    );
+
+    sdk.set_payer(clone_keypair(&default_taker.user));
+    let base_start = get_token_balance(&sdk.client, default_taker.base_ata).await;
+    let quote_start = get_token_balance(&sdk.client, default_taker.quote_ata).await;
+    let base_lot_size = &sdk.base_lot_size;
+    println!("base_lot_size: {}", base_lot_size);
+    let quote_lot_size = &sdk.quote_lot_size;
+    println!("quote_lot_size: {}", quote_lot_size);
+    println!(
+        "base_lots per base_unit: {}",
+        &sdk.num_base_lots_per_base_unit
+    );
+
+    let new_order_ix = create_new_order_instruction(
+        &sdk.core.active_market_key,
+        &default_taker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &params,
+    );
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![])
+        .await
+        .unwrap();
+    let base_end = get_token_balance(&sdk.client, default_taker.base_ata).await;
+    let quote_end = get_token_balance(&sdk.client, default_taker.quote_ata).await;
+    println!("Base start: {}", base_start);
+    println!("Quote start: {}", quote_start);
+    println!("Base end: {}", base_end);
+    println!("Quote end: {}", quote_end);
+    assert_eq!(
+        quote_end - quote_start,
+        first_cross_price * first_cross_size * quote_lot_size
+            + second_cross_price * second_cross_size * quote_lot_size
+    );
+    assert_eq!(
+        base_start - base_end,
+        first_cross_size * base_lot_size + second_cross_size * base_lot_size
+    );
+
+    let base_start = get_token_balance(&sdk.client, default_maker.base_ata).await;
+    let quote_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
+
+    let withdraw_ix = create_withdraw_funds_instruction(
+        &sdk.core.active_market_key,
+        &default_maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+    );
+    sdk.client
+        .sign_send_instructions(vec![withdraw_ix], vec![])
+        .await
+        .unwrap();
+    let base_end = get_token_balance(&sdk.client, default_maker.base_ata).await;
+    let quote_end = get_token_balance(&sdk.client, default_maker.quote_ata).await;
+
+    assert_eq!(quote_end - quote_start, 0);
+    assert_eq!(
+        base_end - base_start,
+        first_cross_size * base_lot_size + second_cross_size * base_lot_size
+    );
 }

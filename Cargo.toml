@@ -26,3 +26,5 @@ num_enum = "^0.5.1"
 phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "6a2e629" }
 itertools = "0.10.5"
 thiserror = "^1.0.24"
+ellipsis-macros = "0.1.1" 
+solana-security-txt = "1.1.0"

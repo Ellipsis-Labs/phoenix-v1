@@ -55,6 +55,9 @@ pub struct InitializeParams {
 
     /// The Pubkey of the account that will receive fees for this market.
     pub fee_collector: Pubkey,
+
+    /// Raw base unit is one whole unit (token) of the base token. A BaseUnit within Phoenix comprises a number of raw base units as defined by this field.
+    pub raw_base_units_per_base_unit: Option<u32>,
 }
 
 pub(crate) fn process_initialize_market<'a, 'info>(
@@ -84,20 +87,22 @@ pub(crate) fn process_initialize_market<'a, 'info>(
         num_base_lots_per_base_unit,
         taker_fee_bps,
         fee_collector,
+        raw_base_units_per_base_unit,
     } = InitializeParams::try_from_slice(data)?;
 
     let tick_size_in_quote_lots_per_base_unit =
         QuoteLotsPerBaseUnitPerTick::new(tick_size_in_quote_lots_per_base_unit);
     let num_quote_lots_per_quote_unit = QuoteLotsPerQuoteUnit::new(num_quote_lots_per_quote_unit);
     let num_base_lots_per_base_unit = BaseLotsPerBaseUnit::new(num_base_lots_per_base_unit);
-
     assert_with_msg(
         taker_fee_bps <= 10000,
         ProgramError::InvalidInstructionData,
         "Taker fee must be less than or equal to 10000 basis points (100%)",
     )?;
 
-    let base_atoms_per_base_unit = BaseAtomsPerBaseUnit::new(10u64.pow(base_mint.decimals as u32));
+    let base_atoms_per_base_unit = BaseAtomsPerBaseUnit::new(
+        10u64.pow(base_mint.decimals as u32) * raw_base_units_per_base_unit.unwrap_or(1) as u64,
+    );
     let quote_atoms_per_quote_unit =
         QuoteAtomsPerQuoteUnit::new(10u64.pow(quote_mint.decimals as u32));
 
@@ -233,6 +238,7 @@ pub(crate) fn process_initialize_market<'a, 'info>(
         *market_creator.key,
         *market_creator.key,
         fee_collector,
+        raw_base_units_per_base_unit.unwrap_or(1),
     );
 
     drop(header);

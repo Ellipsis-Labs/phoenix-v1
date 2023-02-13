@@ -2,7 +2,7 @@
 ///! The program uses explicit types for all quantities, but these unit types
 ///! will not be exposed to the client.
 ///!
-///! Instead, these wrapper structs exposes all of the quantities as u64s.
+///! Instead, these wrapper structs expose all of the quantities as u64s.
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::pubkey::Pubkey;
 
@@ -26,8 +26,9 @@ struct MarketHeader {
     fee_recipient: Pubkey,
     market_sequence_number: u64,
     successor: Pubkey,
-    _padding1: u64,
-    _padding2: u64,
+    raw_base_units_per_base_unit: u32,
+    _padding1: u32,
+    _padding2: [u64; 32],
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Copy, Clone, PartialEq, Eq, Debug)]
