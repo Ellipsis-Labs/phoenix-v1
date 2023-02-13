@@ -1,0 +1,491 @@
+use crate::{
+    program::{
+        dispatch_market::load_with_dispatch_mut,
+        error::{assert_with_msg, PhoenixError},
+        loaders::NewOrderContext,
+        status::MarketStatus,
+        token_utils::{maybe_invoke_deposit, maybe_invoke_withdraw},
+        MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
+    },
+    quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, WrapperU64},
+    state::{markets::MarketEvent, OrderPacket, OrderPacketMetadata, Side},
+};
+use borsh::{BorshDeserialize, BorshSerialize};
+use itertools::Itertools;
+use solana_program::{
+    account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_compute_units,
+    program_error::ProgramError, pubkey::Pubkey,
+};
+use std::mem::size_of;
+
+/// Struct to send a vector of bids and asks as PostOnly orders in a single packet.
+#[derive(BorshDeserialize, BorshSerialize, Debug)]
+pub struct MultipleOrderPacket {
+    /// Bids and asks are in the format (price in ticks, size in base lots)
+    pub bids: Vec<CondensedOrder>,
+    pub asks: Vec<CondensedOrder>,
+    pub client_order_id: Option<u128>,
+    pub reject_post_only: bool,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Debug)]
+pub struct CondensedOrder {
+    pub price_in_ticks: u64,
+    pub size_in_base_lots: u64,
+}
+
+impl MultipleOrderPacket {
+    pub fn new(
+        bids: Vec<(u64, u64)>,
+        asks: Vec<(u64, u64)>,
+        client_order_id: Option<u128>,
+        reject_post_only: bool,
+    ) -> Self {
+        MultipleOrderPacket {
+            bids: bids
+                .iter()
+                .map(|(p, s)| CondensedOrder {
+                    price_in_ticks: *p,
+                    size_in_base_lots: *s,
+                })
+                .collect(),
+            asks: asks
+                .iter()
+                .map(|(p, s)| CondensedOrder {
+                    price_in_ticks: *p,
+                    size_in_base_lots: *s,
+                })
+                .collect(),
+            client_order_id,
+            reject_post_only,
+        }
+    }
+
+    pub fn new_default(bids: Vec<(u64, u64)>, asks: Vec<(u64, u64)>) -> Self {
+        MultipleOrderPacket {
+            bids: bids
+                .iter()
+                .map(|(p, s)| CondensedOrder {
+                    price_in_ticks: *p,
+                    size_in_base_lots: *s,
+                })
+                .collect(),
+            asks: asks
+                .iter()
+                .map(|(p, s)| CondensedOrder {
+                    price_in_ticks: *p,
+                    size_in_base_lots: *s,
+                })
+                .collect(),
+            client_order_id: None,
+            reject_post_only: true,
+        }
+    }
+}
+
+/// This function performs an IOC or FOK order against the specified market.
+pub(crate) fn process_swap<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    sol_log_compute_units();
+    let new_order_context = NewOrderContext::load_cross_only(market_context, accounts, false)?;
+    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_none(),
+        ProgramError::InvalidInstructionData,
+        "Too many accounts",
+    )?;
+    assert_with_msg(
+        order_packet.is_take_only(),
+        ProgramError::InvalidInstructionData,
+        "Order type must be IOC or FOK",
+    )?;
+    assert_with_msg(
+        !order_packet.no_deposit_or_withdrawal(),
+        ProgramError::InvalidInstructionData,
+        "Instruction does not allow using deposited funds",
+    )?;
+    process_new_order(
+        new_order_context,
+        market_context,
+        &mut order_packet,
+        record_event_fn,
+    )
+}
+
+/// This function performs an IOC or FOK order against the specified market
+/// using only the funds already available to the trader.
+/// Only users with sufficient funds and a "seat" on the market are authorized
+/// to perform this action.
+pub(crate) fn process_swap_with_free_funds<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let new_order_context = NewOrderContext::load_cross_only(market_context, accounts, true)?;
+    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_some(),
+        ProgramError::InvalidInstructionData,
+        "Missing seat for market maker",
+    )?;
+    assert_with_msg(
+        order_packet.is_take_only(),
+        ProgramError::InvalidInstructionData,
+        "Order type must be IOC or FOK",
+    )?;
+    assert_with_msg(
+        order_packet.no_deposit_or_withdrawal(),
+        ProgramError::InvalidInstructionData,
+        "Order must be set to use only deposited funds",
+    )?;
+    process_new_order(
+        new_order_context,
+        market_context,
+        &mut order_packet,
+        record_event_fn,
+    )
+}
+
+/// This function performs a Post-Only or Limit order against the specified market.
+/// Only users with a "seat" on the market are authorized to perform this action.
+pub(crate) fn process_place_limit_order<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, false)?;
+    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_some(),
+        ProgramError::InvalidInstructionData,
+        "Missing seat for market maker",
+    )?;
+    assert_with_msg(
+        !order_packet.is_take_only(),
+        ProgramError::InvalidInstructionData,
+        "Order type must be Limit or PostOnly",
+    )?;
+    assert_with_msg(
+        !order_packet.no_deposit_or_withdrawal(),
+        ProgramError::InvalidInstructionData,
+        "Instruction does not allow using deposited funds",
+    )?;
+    process_new_order(
+        new_order_context,
+        market_context,
+        &mut order_packet,
+        record_event_fn,
+    )
+}
+
+/// This function performs a Post-Only or Limit order against the specified market
+/// using only the funds already available to the trader.
+/// Only users with sufficient funds and a "seat" on the market are authorized
+/// to perform this action.
+pub(crate) fn process_place_limit_order_with_free_funds<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, true)?;
+    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_some(),
+        ProgramError::InvalidInstructionData,
+        "Missing seat for market maker",
+    )?;
+    assert_with_msg(
+        !order_packet.is_take_only(),
+        ProgramError::InvalidInstructionData,
+        "Order type must be Limit or PostOnly",
+    )?;
+    assert_with_msg(
+        order_packet.no_deposit_or_withdrawal(),
+        ProgramError::InvalidInstructionData,
+        "Order must be set to use only deposited funds",
+    )?;
+    process_new_order(
+        new_order_context,
+        market_context,
+        &mut order_packet,
+        record_event_fn,
+    )
+}
+
+/// This function places multiple Post-Only orders against the specified market.
+/// Only users with a "seat" on the market are authorized to perform this action.
+///
+/// Orders at the same price level will be merged.
+pub(crate) fn process_place_multiple_post_only_orders<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, false)?;
+    let multiple_order_packet = MultipleOrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_some(),
+        ProgramError::InvalidInstructionData,
+        "Missing seat for market maker",
+    )?;
+
+    process_multiple_new_orders(
+        new_order_context,
+        market_context,
+        multiple_order_packet,
+        record_event_fn,
+        false,
+    )
+}
+
+/// This function plcaces multiple Post-Only orders against the specified market
+/// using only the funds already available to the trader.
+/// Only users with sufficient funds and a "seat" on the market are authorized
+/// to perform this action.
+///
+/// Orders at the same price level will be merged.
+pub(crate) fn process_place_multiple_post_only_orders_with_free_funds<'a, 'info>(
+    _program_id: &Pubkey,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    accounts: &'a [AccountInfo<'info>],
+    data: &[u8],
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, true)?;
+    let multiple_order_packet = MultipleOrderPacket::try_from_slice(data)?;
+    assert_with_msg(
+        new_order_context.seat_option.is_some(),
+        ProgramError::InvalidInstructionData,
+        "Missing seat for market maker",
+    )?;
+    process_multiple_new_orders(
+        new_order_context,
+        market_context,
+        multiple_order_packet,
+        record_event_fn,
+        true,
+    )
+}
+
+fn process_new_order<'a, 'info>(
+    new_order_context: NewOrderContext<'a, 'info>,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    order_packet: &mut OrderPacket,
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+) -> ProgramResult {
+    let PhoenixMarketContext {
+        market_info,
+        signer: trader,
+    } = market_context;
+    let NewOrderContext { vault_context, .. } = new_order_context;
+    let (quote_lot_size, base_lot_size) = {
+        let header = market_info.get_header()?;
+        (header.get_quote_lot_size(), header.get_base_lot_size())
+    };
+
+    let side = order_packet.side();
+    let (
+        quote_atoms_to_withdraw,
+        quote_atoms_to_deposit,
+        base_atoms_to_withdraw,
+        base_atoms_to_deposit,
+    ) = {
+        let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
+        let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
+        // Copies the order_packet onto the stack to start or continue matching
+        let (_order_id, matching_engine_response) = market
+            .place_order(trader.key, *order_packet, record_event_fn)
+            .ok_or(PhoenixError::NewOrderError)?;
+
+        // Update intermediate matched values
+        (
+            matching_engine_response.num_quote_lots_out * quote_lot_size,
+            matching_engine_response.get_deposit_amount_bid_in_quote_lots() * quote_lot_size,
+            matching_engine_response.num_base_lots_out * base_lot_size,
+            matching_engine_response.get_deposit_amount_ask_in_base_lots() * base_lot_size,
+        )
+    };
+    let header = market_info.get_header()?;
+    let quote_params = &header.quote_params;
+    let base_params = &header.base_params;
+
+    if quote_atoms_to_withdraw > QuoteAtoms::ZERO || base_atoms_to_withdraw > BaseAtoms::ZERO {
+        let status = MarketStatus::from(header.status);
+        assert_with_msg(
+            status.cross_allowed(),
+            ProgramError::InvalidAccountData,
+            &format!("Market is not active, market status is {}", status),
+        )?;
+    }
+    if !order_packet.no_deposit_or_withdrawal() {
+        if let Some(PhoenixVaultContext {
+            base_account,
+            quote_account,
+            base_vault,
+            quote_vault,
+            token_program,
+        }) = vault_context
+        {
+            match side {
+                Side::Bid => {
+                    maybe_invoke_withdraw(
+                        market_info.key,
+                        &base_params.mint_key,
+                        base_params.vault_bump as u8,
+                        base_atoms_to_withdraw.as_u64(),
+                        &token_program,
+                        &base_account,
+                        &base_vault,
+                    )?;
+                    maybe_invoke_deposit(
+                        quote_atoms_to_deposit.as_u64(),
+                        &token_program,
+                        &quote_account,
+                        &quote_vault,
+                        trader.as_ref(),
+                    )?;
+                }
+                Side::Ask => {
+                    maybe_invoke_withdraw(
+                        market_info.key,
+                        &quote_params.mint_key,
+                        quote_params.vault_bump as u8,
+                        quote_atoms_to_withdraw.as_u64(),
+                        &token_program,
+                        &quote_account,
+                        &quote_vault,
+                    )?;
+                    maybe_invoke_deposit(
+                        base_atoms_to_deposit.as_u64(),
+                        &token_program,
+                        &base_account,
+                        &base_vault,
+                        trader.as_ref(),
+                    )?;
+                }
+            }
+        }
+    } else if quote_atoms_to_deposit > QuoteAtoms::ZERO || base_atoms_to_deposit > BaseAtoms::ZERO {
+        // Should never execute as the matching engine should return None in this case
+        phoenix_log!("Deposited amount of funds were insufficient to execute the order");
+        return Err(ProgramError::InsufficientFunds);
+    }
+
+    Ok(())
+}
+
+fn process_multiple_new_orders<'a, 'info>(
+    new_order_context: NewOrderContext<'a, 'info>,
+    market_context: &PhoenixMarketContext<'a, 'info>,
+    multiple_order_packet: MultipleOrderPacket,
+    record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    no_deposit: bool,
+) -> ProgramResult {
+    let PhoenixMarketContext {
+        market_info,
+        signer: trader,
+    } = market_context;
+    let NewOrderContext { vault_context, .. } = new_order_context;
+
+    let MultipleOrderPacket {
+        bids,
+        asks,
+        client_order_id,
+        reject_post_only,
+    } = multiple_order_packet;
+    let client_order_id = client_order_id.unwrap_or(0);
+    let mut quote_lots_to_deposit = QuoteLots::ZERO;
+    let mut base_lots_to_deposit = BaseLots::ZERO;
+    let (quote_lot_size, base_lot_size) = {
+        let header = market_info.get_header()?;
+        (header.get_quote_lot_size(), header.get_base_lot_size())
+    };
+
+    {
+        let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
+        let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
+        for (book_orders, side) in [(&bids, Side::Bid), (&asks, Side::Ask)].iter() {
+            for CondensedOrder {
+                price_in_ticks,
+                size_in_base_lots,
+            } in book_orders
+                .iter()
+                .sorted_by(|o1, o2| o1.price_in_ticks.cmp(&o2.price_in_ticks))
+                .group_by(|o| o.price_in_ticks)
+                .into_iter()
+                .map(|(price_in_ticks, level)| CondensedOrder {
+                    price_in_ticks,
+                    size_in_base_lots: level.fold(0, |acc, o| acc + o.size_in_base_lots),
+                })
+            {
+                let order_packet = OrderPacket::new_post_only(
+                    *side,
+                    price_in_ticks,
+                    size_in_base_lots,
+                    client_order_id,
+                    reject_post_only,
+                    no_deposit,
+                );
+                let matching_engine_response = {
+                    let (_order_id, matching_engine_response) = market
+                        .place_order(trader.key, order_packet, record_event_fn)
+                        .ok_or(PhoenixError::NewOrderError)?;
+                    matching_engine_response
+                };
+
+                quote_lots_to_deposit +=
+                    matching_engine_response.get_deposit_amount_bid_in_quote_lots();
+                base_lots_to_deposit +=
+                    matching_engine_response.get_deposit_amount_ask_in_base_lots();
+            }
+        }
+    }
+
+    if !no_deposit {
+        if let Some(PhoenixVaultContext {
+            base_account,
+            quote_account,
+            base_vault,
+            quote_vault,
+            token_program,
+        }) = vault_context
+        {
+            if !bids.is_empty() {
+                maybe_invoke_deposit(
+                    (quote_lots_to_deposit * quote_lot_size).as_u64(),
+                    &token_program,
+                    &quote_account,
+                    &quote_vault,
+                    trader.as_ref(),
+                )?;
+            }
+            if !asks.is_empty() {
+                maybe_invoke_deposit(
+                    (base_lots_to_deposit * base_lot_size).as_u64(),
+                    &token_program,
+                    &base_account,
+                    &base_vault,
+                    trader.as_ref(),
+                )?;
+            }
+        }
+    } else if base_lots_to_deposit > BaseLots::ZERO || quote_lots_to_deposit > QuoteLots::ZERO {
+        phoenix_log!("Deposited amount of funds were insufficient to execute the order");
+        return Err(ProgramError::InsufficientFunds);
+    }
+
+    Ok(())
+}

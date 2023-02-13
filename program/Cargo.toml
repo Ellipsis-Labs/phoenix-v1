@@ -1,0 +1,41 @@
+cargo-features = ["workspace-inheritance"]
+
+[package]
+name = "phoenix"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "phoenix"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+test = []
+
+[dependencies]
+solana-program = { workspace = true }
+shank = "0.0.9"
+spl-token = { workspace = true }
+spl-associated-token-account = { workspace = true }
+lib-sokoban = { workspace = true } 
+bytemuck = { workspace = true } 
+num_enum = { workspace = true } 
+thiserror = { workspace = true } 
+borsh = { workspace = true }
+itertools = { workspace = true }
+ellipsis-macros = "0.1.1" 
+
+[dev-dependencies]
+rand = { workspace = true }
+solana-test-client = { workspace = true } 
+solana-sdk = { workspace = true }
+tokio = { workspace = true }
+ellipsis-client = { workspace = true }
+phoenix-sdk = { workspace = true }
+phoenix-types = { workspace = true }
