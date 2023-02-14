@@ -24,7 +24,6 @@ use solana_program::{
     pubkey::Pubkey,
     system_program,
 };
-use static_assertions::const_assert;
 use static_assertions::const_assert_eq;
 
 pub fn get_vault_address(market: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {

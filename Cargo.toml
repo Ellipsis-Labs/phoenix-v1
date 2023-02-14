@@ -26,23 +26,23 @@ codegen-units = 1
 overflow-checks = true
 
 [dependencies]
-shank = "0.0.9"
-spl-token = { version = "3.2.0", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.1.1", features = [ "no-entrypoint" ] } 
+shank = "=0.0.12"
+spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "=1.1.1", features = [ "no-entrypoint" ] } 
 solana-program = "=1.14.9"
-borsh = "0.9.3"
-bytemuck = "1.11.0"
-lib-sokoban = "0.3.0" 
-num_enum = "^0.5.1"
-itertools = "0.10.5"
-thiserror = "^1.0.24"
-ellipsis-macros = "0.1.1" 
-solana-security-txt = "1.1.0"
-static_assertions = "0.1.1"
+borsh = "=0.9.3"
+bytemuck = "=1.13.0"
+lib-sokoban = "=0.3.0" 
+num_enum = "=0.5.9"
+itertools = "=0.10.5"
+thiserror = "=1.0.38"
+ellipsis-macros = "=0.1.1" 
+solana-security-txt = "=1.1.0"
+static_assertions = "=1.1.0"
 
 [dev-dependencies]
 rand = "0.7.3"
-ellipsis-client = "=0.1.15"
+ellipsis-client = "0.1.15"
 tokio = { version = "1.8.4", features = ["full"] }
 solana-sdk = "=1.14.9"
 phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "adb01a3" }
