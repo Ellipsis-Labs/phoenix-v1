@@ -110,6 +110,8 @@ pub trait Market<
         TypedLadder { bids, asks }
     }
 
+    fn get_taker_fee_bps(&self) -> u64;
+    fn get_tick_size(&self) -> QuoteLotsPerBaseUnitPerTick;
     fn get_base_lots_per_base_unit(&self) -> BaseLotsPerBaseUnit;
     fn get_sequence_number(&self) -> u64;
     fn get_registered_traders(&self) -> &dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>;
