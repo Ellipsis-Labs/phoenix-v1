@@ -7,3 +7,6 @@ pub use fifo::*;
 pub use market_events::*;
 pub use market_traits::*;
 pub use market_wrapper::*;
+
+#[cfg(test)]
+pub mod test_market;

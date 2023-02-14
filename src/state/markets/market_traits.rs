@@ -123,7 +123,7 @@ pub trait Market<
     ) -> &dyn OrderedNodeAllocatorMap<MarketOrderId, MarketRestingOrder>;
 }
 
-pub trait WritableMarket<
+pub(crate) trait WritableMarket<
     MarketTraderId: BorshDeserialize + BorshSerialize + Copy,
     MarketOrderId: OrderId,
     MarketRestingOrder: RestingOrder,
