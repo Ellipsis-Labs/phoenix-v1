@@ -22,7 +22,6 @@ pub(crate) fn process_deposit_funds<'a, 'info>(
     data: &[u8],
 ) -> ProgramResult {
     let DepositContext {
-        seat: _,
         vault_context:
             PhoenixVaultContext {
                 base_account,
@@ -31,6 +30,7 @@ pub(crate) fn process_deposit_funds<'a, 'info>(
                 quote_vault,
                 token_program,
             },
+        ..
     } = DepositContext::load(market_context, accounts)?;
     let DepositParams {
         quote_lots_to_deposit,

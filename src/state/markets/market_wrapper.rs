@@ -1,21 +1,25 @@
-use super::Market;
+use super::{Market, WritableMarket};
 
-pub struct MarketWrapperMut<
+pub(crate) struct MarketWrapperMut<
     'a,
     MarketTraderId,
     MarketOrderId,
     MarketRestingOrder,
     MarketOrderPacket,
 > {
-    pub inner:
-        &'a mut dyn Market<MarketTraderId, MarketOrderId, MarketRestingOrder, MarketOrderPacket>,
+    pub inner: &'a mut dyn WritableMarket<
+        MarketTraderId,
+        MarketOrderId,
+        MarketRestingOrder,
+        MarketOrderPacket,
+    >,
 }
 
 impl<'a, MarketTraderId, MarketOrderPacket, MarketRestingOrder, MarketOrderId>
     MarketWrapperMut<'a, MarketTraderId, MarketOrderId, MarketRestingOrder, MarketOrderPacket>
 {
-    pub fn new(
-        market: &'a mut dyn Market<
+    pub(crate) fn new(
+        market: &'a mut dyn WritableMarket<
             MarketTraderId,
             MarketOrderId,
             MarketRestingOrder,

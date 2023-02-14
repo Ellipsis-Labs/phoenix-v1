@@ -54,15 +54,10 @@ pub trait Market<
     MarketOrderPacket: OrderPacketMetadata,
 >
 {
-    fn initialize_with_params(
-        &mut self,
-        tick_size_in_quote_lots_per_base_unit: QuoteLotsPerBaseUnitPerTick,
-        base_lots_per_base_unit: BaseLotsPerBaseUnit,
-    );
-
-    fn set_fee(&mut self, taker_fee_bps: u64);
-
     fn get_data_size(&self) -> usize {
+        unimplemented!()
+    }
+    fn get_collected_fee_amount(&self) -> QuoteLots {
         unimplemented!()
     }
     fn get_uncollected_fee_amount(&self) -> QuoteLots {
@@ -117,20 +112,39 @@ pub trait Market<
 
     fn get_base_lots_per_base_unit(&self) -> BaseLotsPerBaseUnit;
     fn get_sequence_number(&self) -> u64;
-
     fn get_registered_traders(&self) -> &dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>;
+    fn get_trader_state(&self, key: &MarketTraderId) -> Option<&TraderState>;
+    fn get_trader_state_from_index(&self, index: u32) -> &TraderState;
+    fn get_trader_index(&self, trader: &MarketTraderId) -> Option<u32>;
+    fn get_trader_id_from_index(&self, trader_index: u32) -> MarketTraderId;
+    fn get_book(
+        &self,
+        side: Side,
+    ) -> &dyn OrderedNodeAllocatorMap<MarketOrderId, MarketRestingOrder>;
+}
+
+pub trait WritableMarket<
+    MarketTraderId: BorshDeserialize + BorshSerialize + Copy,
+    MarketOrderId: OrderId,
+    MarketRestingOrder: RestingOrder,
+    MarketOrderPacket: OrderPacketMetadata,
+>: Market<MarketTraderId, MarketOrderId, MarketRestingOrder, MarketOrderPacket>
+{
+    fn initialize_with_params(
+        &mut self,
+        tick_size_in_quote_lots_per_base_unit: QuoteLotsPerBaseUnitPerTick,
+        base_lots_per_base_unit: BaseLotsPerBaseUnit,
+    );
+
+    fn set_fee(&mut self, taker_fee_bps: u64);
+
+    fn get_trader_state_mut(&mut self, key: &MarketTraderId) -> Option<&mut TraderState>;
+
     fn get_registered_traders_mut(
         &mut self,
     ) -> &mut dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>;
 
-    fn get_trader_state_mut(&mut self, key: &MarketTraderId) -> Option<&mut TraderState>;
-    fn get_trader_state(&self, key: &MarketTraderId) -> Option<&TraderState>;
-
     fn get_trader_state_from_index_mut(&mut self, index: u32) -> &mut TraderState;
-    fn get_trader_state_from_index(&self, index: u32) -> &TraderState;
-
-    fn get_trader_index(&self, trader: &MarketTraderId) -> Option<u32>;
-    fn get_trader_id_from_index(&self, trader_index: u32) -> MarketTraderId;
 
     fn get_or_register_trader(&mut self, trader: &MarketTraderId) -> Option<u32> {
         let registered_traders = self.get_registered_traders_mut();
@@ -148,11 +162,6 @@ pub trait Market<
         }
         Some(())
     }
-
-    fn get_book(
-        &self,
-        side: Side,
-    ) -> &dyn OrderedNodeAllocatorMap<MarketOrderId, MarketRestingOrder>;
 
     fn get_book_mut(
         &mut self,

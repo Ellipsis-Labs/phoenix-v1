@@ -1,11 +1,11 @@
 const path = require("path");
 const fs = require("fs");
-const programDir = path.join(__dirname, "..", "program");
+const programDir = path.join(__dirname, "..");
 const idlDir = __dirname;
 const rootDir = path.join(__dirname, ".crates");
 const cargoToml = path.join(programDir, "Cargo.toml");
 
-const PROGRAM_NAME = "phoenix";
+const PROGRAM_NAME = "phoenix_v1";
 
 const {
   rustbinMatch,

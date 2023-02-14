@@ -7,7 +7,6 @@ use std::ops::Deref;
 pub mod phoenix_checkers;
 pub mod token_checkers;
 
-pub use phoenix_checkers::*;
 pub use token_checkers::*;
 
 #[derive(Clone)]

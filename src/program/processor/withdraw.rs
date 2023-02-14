@@ -4,7 +4,7 @@ use crate::{
         error::{assert_with_msg, PhoenixError},
         loaders::CancelOrWithdrawContext as Withdraw,
         token_utils::try_withdraw,
-        validation::checkers::MarketAccountInfo,
+        validation::checkers::phoenix_checkers::MarketAccountInfo,
         MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
     quantities::{BaseLots, QuoteLots, WrapperU64},

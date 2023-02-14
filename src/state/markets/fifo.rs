@@ -2,6 +2,7 @@ use super::Market;
 use super::MarketEvent;
 use super::OrderId;
 use super::RestingOrder;
+use super::WritableMarket;
 use crate::quantities::AdjustedQuoteLots;
 use crate::quantities::BaseLots;
 use crate::quantities::BaseLotsPerBaseUnit;
@@ -259,19 +260,8 @@ impl<
         self.order_sequence_number
     }
 
-    fn initialize_with_params(
-        &mut self,
-        tick_size_in_quote_lots_per_base_unit: QuoteLotsPerBaseUnitPerTick,
-        base_lots_per_base_unit: BaseLotsPerBaseUnit,
-    ) {
-        self.initialize_with_params_inner(
-            tick_size_in_quote_lots_per_base_unit,
-            base_lots_per_base_unit,
-        );
-    }
-
-    fn set_fee(&mut self, taker_fee_bps: u64) {
-        self.taker_fee_bps = taker_fee_bps;
+    fn get_collected_fee_amount(&self) -> QuoteLots {
+        self.collected_quote_lot_fees
     }
 
     fn get_uncollected_fee_amount(&self) -> QuoteLots {
@@ -282,22 +272,8 @@ impl<
         &self.traders as &dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>
     }
 
-    fn get_registered_traders_mut(
-        &mut self,
-    ) -> &mut dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState> {
-        &mut self.traders as &mut dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>
-    }
-
-    fn get_trader_state_mut(&mut self, trader_id: &MarketTraderId) -> Option<&mut TraderState> {
-        self.get_registered_traders_mut().get_mut(trader_id)
-    }
-
     fn get_trader_state(&self, trader_id: &MarketTraderId) -> Option<&TraderState> {
         self.get_registered_traders().get(trader_id)
-    }
-
-    fn get_trader_state_from_index_mut(&mut self, index: u32) -> &mut TraderState {
-        &mut self.traders.get_node_mut(index).value
     }
 
     fn get_trader_state_from_index(&self, index: u32) -> &TraderState {
@@ -324,6 +300,53 @@ impl<
             Side::Bid => &self.bids,
             Side::Ask => &self.asks,
         }
+    }
+}
+
+impl<
+        MarketTraderId: Debug
+            + PartialOrd
+            + Ord
+            + Default
+            + Copy
+            + Clone
+            + Zeroable
+            + Pod
+            + BorshDeserialize
+            + BorshSerialize,
+        const BIDS_SIZE: usize,
+        const ASKS_SIZE: usize,
+        const NUM_SEATS: usize,
+    > WritableMarket<MarketTraderId, FIFOOrderId, FIFORestingOrder, OrderPacket>
+    for FIFOMarket<MarketTraderId, BIDS_SIZE, ASKS_SIZE, NUM_SEATS>
+{
+    fn initialize_with_params(
+        &mut self,
+        tick_size_in_quote_lots_per_base_unit: QuoteLotsPerBaseUnitPerTick,
+        base_lots_per_base_unit: BaseLotsPerBaseUnit,
+    ) {
+        self.initialize_with_params_inner(
+            tick_size_in_quote_lots_per_base_unit,
+            base_lots_per_base_unit,
+        );
+    }
+
+    fn set_fee(&mut self, taker_fee_bps: u64) {
+        self.taker_fee_bps = taker_fee_bps;
+    }
+
+    fn get_registered_traders_mut(
+        &mut self,
+    ) -> &mut dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState> {
+        &mut self.traders as &mut dyn OrderedNodeAllocatorMap<MarketTraderId, TraderState>
+    }
+
+    fn get_trader_state_mut(&mut self, trader_id: &MarketTraderId) -> Option<&mut TraderState> {
+        self.get_registered_traders_mut().get_mut(trader_id)
+    }
+
+    fn get_trader_state_from_index_mut(&mut self, index: u32) -> &mut TraderState {
+        &mut self.traders.get_node_mut(index).value
     }
 
     #[inline(always)]

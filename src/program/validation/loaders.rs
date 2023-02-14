@@ -6,7 +6,10 @@
 //!
 //! The loader structs are used to validate the accounts in the instruction data
 
-use super::checkers::{MarketAccountInfo, MintAccountInfo, SeatAccountInfo, TokenAccountInfo, PDA};
+use super::checkers::{
+    phoenix_checkers::{MarketAccountInfo, SeatAccountInfo},
+    MintAccountInfo, TokenAccountInfo, PDA,
+};
 use crate::{
     phoenix_log_authority,
     program::{
@@ -32,13 +35,15 @@ pub fn get_seat_address(market: &Pubkey, trader: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"seat", market.as_ref(), trader.as_ref()], &crate::ID)
 }
 
-pub struct PhoenixLogContext<'a, 'info> {
-    pub phoenix_program: Program<'a, 'info>,
-    pub log_authority: PDA<'a, 'info>,
+pub(crate) struct PhoenixLogContext<'a, 'info> {
+    pub(crate) phoenix_program: Program<'a, 'info>,
+    pub(crate) log_authority: PDA<'a, 'info>,
 }
 
 impl<'a, 'info> PhoenixLogContext<'a, 'info> {
-    pub fn load(account_iter: &mut Iter<'a, AccountInfo<'info>>) -> Result<Self, ProgramError> {
+    pub(crate) fn load(
+        account_iter: &mut Iter<'a, AccountInfo<'info>>,
+    ) -> Result<Self, ProgramError> {
         Ok(Self {
             phoenix_program: Program::new(next_account_info(account_iter)?, &crate::id())?,
             log_authority: PDA::new(
@@ -49,13 +54,15 @@ impl<'a, 'info> PhoenixLogContext<'a, 'info> {
     }
 }
 
-pub struct PhoenixMarketContext<'a, 'info> {
-    pub market_info: MarketAccountInfo<'a, 'info>,
-    pub signer: Signer<'a, 'info>,
+pub(crate) struct PhoenixMarketContext<'a, 'info> {
+    pub(crate) market_info: MarketAccountInfo<'a, 'info>,
+    pub(crate) signer: Signer<'a, 'info>,
 }
 
 impl<'a, 'info> PhoenixMarketContext<'a, 'info> {
-    pub fn load(account_iter: &mut Iter<'a, AccountInfo<'info>>) -> Result<Self, ProgramError> {
+    pub(crate) fn load(
+        account_iter: &mut Iter<'a, AccountInfo<'info>>,
+    ) -> Result<Self, ProgramError> {
         const_assert_eq!(std::mem::size_of::<MarketHeader>(), 576);
         Ok(Self {
             market_info: MarketAccountInfo::new(next_account_info(account_iter)?)?,
@@ -63,7 +70,7 @@ impl<'a, 'info> PhoenixMarketContext<'a, 'info> {
         })
     }
 
-    pub fn load_init(
+    pub(crate) fn load_init(
         account_iter: &mut Iter<'a, AccountInfo<'info>>,
     ) -> Result<Self, ProgramError> {
         const_assert_eq!(std::mem::size_of::<MarketHeader>(), 576);
@@ -75,16 +82,16 @@ impl<'a, 'info> PhoenixMarketContext<'a, 'info> {
 }
 
 /// These accounts that are required for all market actions that interact with a token vault
-pub struct PhoenixVaultContext<'a, 'info> {
-    pub base_account: TokenAccountInfo<'a, 'info>,
-    pub quote_account: TokenAccountInfo<'a, 'info>,
-    pub base_vault: TokenAccountInfo<'a, 'info>,
-    pub quote_vault: TokenAccountInfo<'a, 'info>,
-    pub token_program: Program<'a, 'info>,
+pub(crate) struct PhoenixVaultContext<'a, 'info> {
+    pub(crate) base_account: TokenAccountInfo<'a, 'info>,
+    pub(crate) quote_account: TokenAccountInfo<'a, 'info>,
+    pub(crate) base_vault: TokenAccountInfo<'a, 'info>,
+    pub(crate) quote_vault: TokenAccountInfo<'a, 'info>,
+    pub(crate) token_program: Program<'a, 'info>,
 }
 
 impl<'a, 'info> PhoenixVaultContext<'a, 'info> {
-    pub fn load_from_iter(
+    pub(crate) fn load_from_iter(
         account_iter: &mut Iter<'a, AccountInfo<'info>>,
         base_params: &TokenParams,
         quote_params: &TokenParams,
@@ -118,17 +125,17 @@ impl<'a, 'info> PhoenixVaultContext<'a, 'info> {
     }
 }
 
-pub struct InitializeMarketContext<'a, 'info> {
-    pub base_mint: MintAccountInfo<'a, 'info>,
-    pub quote_mint: MintAccountInfo<'a, 'info>,
-    pub base_vault: EmptyAccount<'a, 'info>,
-    pub quote_vault: EmptyAccount<'a, 'info>,
-    pub system_program: Program<'a, 'info>,
-    pub token_program: Program<'a, 'info>,
+pub(crate) struct InitializeMarketContext<'a, 'info> {
+    pub(crate) base_mint: MintAccountInfo<'a, 'info>,
+    pub(crate) quote_mint: MintAccountInfo<'a, 'info>,
+    pub(crate) base_vault: EmptyAccount<'a, 'info>,
+    pub(crate) quote_vault: EmptyAccount<'a, 'info>,
+    pub(crate) system_program: Program<'a, 'info>,
+    pub(crate) token_program: Program<'a, 'info>,
 }
 
 impl<'a, 'info> InitializeMarketContext<'a, 'info> {
-    pub fn load(accounts: &'a [AccountInfo<'info>]) -> Result<Self, ProgramError> {
+    pub(crate) fn load(accounts: &'a [AccountInfo<'info>]) -> Result<Self, ProgramError> {
         let account_iter = &mut accounts.iter();
         let ctx = Self {
             base_mint: MintAccountInfo::new(next_account_info(account_iter)?)?,
@@ -142,14 +149,14 @@ impl<'a, 'info> InitializeMarketContext<'a, 'info> {
     }
 }
 
-pub struct NewOrderContext<'a, 'info> {
+pub(crate) struct NewOrderContext<'a, 'info> {
     // This is only used for limit order instructions
-    pub seat_option: Option<SeatAccountInfo<'a, 'info>>,
-    pub vault_context: Option<PhoenixVaultContext<'a, 'info>>,
+    pub(crate) seat_option: Option<SeatAccountInfo<'a, 'info>>,
+    pub(crate) vault_context: Option<PhoenixVaultContext<'a, 'info>>,
 }
 
 impl<'a, 'info> NewOrderContext<'a, 'info> {
-    pub fn load_post_allowed(
+    pub(crate) fn load_post_allowed(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
         only_free_funds: bool,
@@ -186,7 +193,7 @@ impl<'a, 'info> NewOrderContext<'a, 'info> {
         })
     }
 
-    pub fn load_cross_only(
+    pub(crate) fn load_cross_only(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
         only_free_funds: bool,
@@ -228,12 +235,12 @@ impl<'a, 'info> NewOrderContext<'a, 'info> {
     }
 }
 
-pub struct CancelOrWithdrawContext<'a, 'info> {
-    pub vault_context: PhoenixVaultContext<'a, 'info>,
+pub(crate) struct CancelOrWithdrawContext<'a, 'info> {
+    pub(crate) vault_context: PhoenixVaultContext<'a, 'info>,
 }
 
 impl<'a, 'info> CancelOrWithdrawContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -260,13 +267,13 @@ impl<'a, 'info> CancelOrWithdrawContext<'a, 'info> {
     }
 }
 
-pub struct DepositContext<'a, 'info> {
-    pub seat: SeatAccountInfo<'a, 'info>,
-    pub vault_context: PhoenixVaultContext<'a, 'info>,
+pub(crate) struct DepositContext<'a, 'info> {
+    _seat: SeatAccountInfo<'a, 'info>,
+    pub(crate) vault_context: PhoenixVaultContext<'a, 'info>,
 }
 
 impl<'a, 'info> DepositContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -283,7 +290,7 @@ impl<'a, 'info> DepositContext<'a, 'info> {
             (header.base_params, header.quote_params)
         };
         let ctx = Self {
-            seat: SeatAccountInfo::new_with_context(
+            _seat: SeatAccountInfo::new_with_context(
                 next_account_info(account_iter)?,
                 market_key,
                 trader_key,
@@ -300,14 +307,14 @@ impl<'a, 'info> DepositContext<'a, 'info> {
     }
 }
 
-pub struct AuthorizedActionContext<'a, 'info> {
-    pub trader: &'a AccountInfo<'info>,
-    pub seat: SeatAccountInfo<'a, 'info>,
-    pub vault_context: PhoenixVaultContext<'a, 'info>,
+pub(crate) struct AuthorizedActionContext<'a, 'info> {
+    pub(crate) trader: &'a AccountInfo<'info>,
+    _seat: SeatAccountInfo<'a, 'info>,
+    pub(crate) vault_context: PhoenixVaultContext<'a, 'info>,
 }
 
 impl<'a, 'info> AuthorizedActionContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -327,7 +334,7 @@ impl<'a, 'info> AuthorizedActionContext<'a, 'info> {
 
         let ctx = Self {
             trader: trader_info,
-            seat: SeatAccountInfo::new_with_context(
+            _seat: SeatAccountInfo::new_with_context(
                 next_account_info(account_iter)?,
                 &market_key,
                 trader_info.key,
@@ -345,12 +352,12 @@ impl<'a, 'info> AuthorizedActionContext<'a, 'info> {
     }
 }
 
-pub struct ChangeMarketStatusContext<'a, 'info> {
-    pub receiver: Option<&'a AccountInfo<'info>>,
+pub(crate) struct ChangeMarketStatusContext<'a, 'info> {
+    pub(crate) receiver: Option<&'a AccountInfo<'info>>,
 }
 
 impl<'a, 'info> ChangeMarketStatusContext<'a, 'info> {
-    pub fn load(accounts: &'a [AccountInfo<'info>]) -> Result<Self, ProgramError> {
+    pub(crate) fn load(accounts: &'a [AccountInfo<'info>]) -> Result<Self, ProgramError> {
         let account_iter = &mut accounts.iter();
         let ctx = Self {
             receiver: next_account_info(account_iter).ok(),
@@ -359,15 +366,15 @@ impl<'a, 'info> ChangeMarketStatusContext<'a, 'info> {
     }
 }
 
-pub struct AuthorizedSeatRequestContext<'a, 'info> {
-    pub payer: Signer<'a, 'info>,
-    pub trader: &'a AccountInfo<'info>,
-    pub seat: EmptyAccount<'a, 'info>,
-    pub system_program: Program<'a, 'info>,
+pub(crate) struct AuthorizedSeatRequestContext<'a, 'info> {
+    pub(crate) payer: Signer<'a, 'info>,
+    pub(crate) trader: &'a AccountInfo<'info>,
+    pub(crate) seat: EmptyAccount<'a, 'info>,
+    pub(crate) system_program: Program<'a, 'info>,
 }
 
 impl<'a, 'info> AuthorizedSeatRequestContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -388,13 +395,13 @@ impl<'a, 'info> AuthorizedSeatRequestContext<'a, 'info> {
     }
 }
 
-pub struct RequestSeatContext<'a, 'info> {
-    pub seat: EmptyAccount<'a, 'info>,
-    pub system_program: Program<'a, 'info>,
+pub(crate) struct RequestSeatContext<'a, 'info> {
+    pub(crate) seat: EmptyAccount<'a, 'info>,
+    pub(crate) system_program: Program<'a, 'info>,
 }
 
 impl<'a, 'info> RequestSeatContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -410,12 +417,12 @@ impl<'a, 'info> RequestSeatContext<'a, 'info> {
     }
 }
 
-pub struct ModifySeatContext<'a, 'info> {
-    pub seat: SeatAccountInfo<'a, 'info>,
+pub(crate) struct ModifySeatContext<'a, 'info> {
+    pub(crate) seat: SeatAccountInfo<'a, 'info>,
 }
 
 impl<'a, 'info> ModifySeatContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -433,14 +440,14 @@ impl<'a, 'info> ModifySeatContext<'a, 'info> {
     }
 }
 
-pub struct CollectFeesContext<'a, 'info> {
-    pub fee_recipient_token_account: TokenAccountInfo<'a, 'info>,
-    pub quote_vault: TokenAccountInfo<'a, 'info>,
-    pub token_program: Program<'a, 'info>,
+pub(crate) struct CollectFeesContext<'a, 'info> {
+    pub(crate) fee_recipient_token_account: TokenAccountInfo<'a, 'info>,
+    pub(crate) quote_vault: TokenAccountInfo<'a, 'info>,
+    pub(crate) token_program: Program<'a, 'info>,
 }
 
 impl<'a, 'info> CollectFeesContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {
@@ -467,13 +474,13 @@ impl<'a, 'info> CollectFeesContext<'a, 'info> {
     }
 }
 
-pub struct ChangeFeeRecipientContext<'a, 'info> {
-    pub new_fee_recipient: AccountInfo<'info>,
-    pub previous_fee_recipient: Option<Signer<'a, 'info>>,
+pub(crate) struct ChangeFeeRecipientContext<'a, 'info> {
+    pub(crate) new_fee_recipient: AccountInfo<'info>,
+    pub(crate) previous_fee_recipient: Option<Signer<'a, 'info>>,
 }
 
 impl<'a, 'info> ChangeFeeRecipientContext<'a, 'info> {
-    pub fn load(
+    pub(crate) fn load(
         market_context: &PhoenixMarketContext<'a, 'info>,
         accounts: &'a [AccountInfo<'info>],
     ) -> Result<Self, ProgramError> {

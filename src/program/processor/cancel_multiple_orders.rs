@@ -1,8 +1,8 @@
 use crate::{
     program::{
         dispatch_market::load_with_dispatch_mut, loaders::CancelOrWithdrawContext as Cancel,
-        token_utils::try_withdraw, validation::checkers::MarketAccountInfo, MarketHeader,
-        PhoenixMarketContext, PhoenixVaultContext,
+        token_utils::try_withdraw, validation::checkers::phoenix_checkers::MarketAccountInfo,
+        MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
     quantities::{Ticks, WrapperU64},
     state::{

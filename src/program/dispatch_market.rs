@@ -2,6 +2,7 @@ use super::error::{assert_with_msg, PhoenixError};
 use super::MarketSizeParams;
 use crate::state::markets::{
     FIFOMarket, FIFOOrderId, FIFORestingOrder, Market, MarketWrapper, MarketWrapperMut,
+    WritableMarket,
 };
 use crate::state::OrderPacket;
 use sokoban::node_allocator::ZeroCopy;
@@ -11,7 +12,7 @@ macro_rules! fifo_market_mut {
     ($num_bids:literal, $num_asks:literal, $num_seats:literal, $bytes:expr) => {
         FIFOMarket::<Pubkey, $num_bids, $num_asks, $num_seats>::load_mut_bytes($bytes)
             .ok_or(PhoenixError::FailedToLoadMarketFromAccount)?
-            as &mut dyn Market<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>
+            as &mut dyn WritableMarket<Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>
     };
 }
 
@@ -29,7 +30,7 @@ macro_rules! fifo_market_size {
     };
 }
 
-pub fn load_with_dispatch_mut<'a>(
+pub(crate) fn load_with_dispatch_mut<'a>(
     market_size_params: &'a MarketSizeParams,
     bytes: &'a mut [u8],
 ) -> Result<MarketWrapperMut<'a, Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>, ProgramError>
@@ -37,7 +38,7 @@ pub fn load_with_dispatch_mut<'a>(
     dispatch_market_mut(market_size_params, bytes, false)
 }
 
-pub fn load_with_dispatch_init<'a>(
+pub(crate) fn load_with_dispatch_init<'a>(
     market_size_params: &'a MarketSizeParams,
     bytes: &'a mut [u8],
 ) -> Result<MarketWrapperMut<'a, Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>, ProgramError>
@@ -45,7 +46,7 @@ pub fn load_with_dispatch_init<'a>(
     dispatch_market_mut(market_size_params, bytes, true)
 }
 
-pub fn dispatch_market_mut<'a>(
+pub(crate) fn dispatch_market_mut<'a>(
     market_size_params: &'a MarketSizeParams,
     bytes: &'a mut [u8],
     is_initial: bool,

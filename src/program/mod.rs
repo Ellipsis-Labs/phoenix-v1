@@ -1,15 +1,15 @@
 pub mod accounts;
 pub mod dispatch_market;
 pub mod error;
-pub mod event_recorder;
+pub(crate) mod event_recorder;
 pub mod events;
 pub mod instruction;
 pub mod instruction_builders;
-pub mod processor;
+pub(crate) mod processor;
 pub mod status;
 pub mod system_utils;
-pub mod token_utils;
-pub mod validation;
+pub(crate) mod token_utils;
+pub(crate) mod validation;
 
 pub use accounts::*;
 pub use dispatch_market::*;

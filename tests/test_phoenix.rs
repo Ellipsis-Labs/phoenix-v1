@@ -504,10 +504,10 @@ async fn test_phoenix_request_seats() {
 }
 
 async fn get_sequence_number(client: &EllipsisClient, market: &Pubkey) -> u64 {
-    let mut market_data = client.get_account(market).await.unwrap().data;
-    let (header_bytes, bytes) = market_data.split_at_mut(size_of::<MarketHeader>());
+    let market_data = client.get_account(market).await.unwrap().data;
+    let (header_bytes, bytes) = market_data.split_at(size_of::<MarketHeader>());
     let header = Box::new(MarketHeader::load_bytes(header_bytes).unwrap());
-    let full_market = load_with_dispatch_mut(&header.market_size_params, bytes).unwrap();
+    let full_market = load_with_dispatch(&header.market_size_params, bytes).unwrap();
     full_market.inner.get_sequence_number()
 }
 
@@ -1578,12 +1578,12 @@ async fn test_phoenix_fees() {
     assert_eq!(quote_balance_end, 0);
     assert_eq!(fee_dest_balance - fee_dest_start, 50000);
 
-    let mut market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
+    let market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
         .await
         .unwrap();
-    let (header_bytes, bytes) = market_account_data.split_at_mut(size_of::<MarketHeader>());
+    let (header_bytes, bytes) = market_account_data.split_at(size_of::<MarketHeader>());
     let header = MarketHeader::load_bytes(header_bytes).unwrap();
-    let market = load_with_dispatch_mut(&header.market_size_params, bytes)
+    let market = load_with_dispatch(&header.market_size_params, bytes)
         .unwrap()
         .inner;
     assert_eq!(
