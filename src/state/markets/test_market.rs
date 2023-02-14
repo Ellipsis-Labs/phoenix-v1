@@ -1,11 +1,13 @@
 use std::collections::VecDeque;
 
-use phoenix::quantities::*;
-use phoenix::state::markets::*;
-use phoenix::state::*;
+use crate::quantities::*;
+use crate::state::markets::*;
+use crate::state::*;
 use rand::prelude::*;
 use sokoban::node_allocator::NodeAllocatorMap;
 use sokoban::ZeroCopy;
+
+use crate::state::markets::MarketEvent;
 
 const BOOK_SIZE: usize = 4096;
 
@@ -328,7 +330,7 @@ fn test_market_simple() {
             let orders = market
                 .bids
                 .iter()
-                .filter(|(_k, v)| v.trader_index == market.traders.get_addr(&m) as u64)
+                .filter(|(_k, v)| v.trader_index == market.traders.get_addr(m) as u64)
                 .map(|(k, _v)| *k)
                 .collect::<Vec<_>>();
             market.cancel_multiple_orders_by_id(m, &orders, true, &mut record_event_fn);
@@ -1439,7 +1441,7 @@ fn test_fok_with_slippage_1() {
 
     let ladder = market.get_typed_ladder(5);
 
-    let mut prev_ladder = starting_ladder.clone();
+    let mut prev_ladder = starting_ladder;
     for event in event_recorder.iter() {
         if let MarketEvent::Fill {
             order_sequence_number: order_id,

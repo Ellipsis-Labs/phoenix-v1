@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "phoenix",
+  "name": "phoenix_v1",
   "instructions": [
     {
       "name": "Swap",
@@ -1591,70 +1591,6 @@
       }
     },
     {
-      "name": "CancelUpToParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "side",
-            "type": {
-              "defined": "Side"
-            }
-          },
-          {
-            "name": "tickLimit",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "numOrdersToSearch",
-            "type": {
-              "option": "u32"
-            }
-          },
-          {
-            "name": "numOrdersToCancel",
-            "type": {
-              "option": "u32"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "CancelMultipleOrdersByIdParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "orders",
-            "type": {
-              "vec": {
-                "defined": "CancelOrderParams"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "DepositParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "quoteLotsToDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "baseLotsToDeposit",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "AuditLogHeader",
       "type": {
         "kind": "struct",
@@ -1851,6 +1787,70 @@
       }
     },
     {
+      "name": "CancelUpToParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "side",
+            "type": {
+              "defined": "Side"
+            }
+          },
+          {
+            "name": "tickLimit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "numOrdersToSearch",
+            "type": {
+              "option": "u32"
+            }
+          },
+          {
+            "name": "numOrdersToCancel",
+            "type": {
+              "option": "u32"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CancelMultipleOrdersByIdParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "orders",
+            "type": {
+              "vec": {
+                "defined": "CancelOrderParams"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quoteLotsToDeposit",
+            "type": "u64"
+          },
+          {
+            "name": "baseLotsToDeposit",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "InitializeParams",
       "type": {
         "kind": "struct",
@@ -1981,6 +1981,26 @@
       }
     },
     {
+      "name": "WithdrawParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quoteLotsToWithdraw",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "baseLotsToWithdraw",
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "MarketHeader",
       "type": {
         "kind": "struct",
@@ -2060,57 +2080,6 @@
       }
     },
     {
-      "name": "WithdrawParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "quoteLotsToWithdraw",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "baseLotsToWithdraw",
-            "type": {
-              "option": "u64"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "Side",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Bid"
-          },
-          {
-            "name": "Ask"
-          }
-        ]
-      }
-    },
-    {
-      "name": "SelfTradeBehavior",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Abort"
-          },
-          {
-            "name": "CancelProvide"
-          },
-          {
-            "name": "DecrementTake"
-          }
-        ]
-      }
-    },
-    {
       "name": "PhoenixMarketEvent",
       "type": {
         "kind": "enum",
@@ -2173,6 +2142,49 @@
                 "defined": "FeeEvent"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uninitialized"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "PostOnly"
+          },
+          {
+            "name": "Paused"
+          },
+          {
+            "name": "Closed"
+          },
+          {
+            "name": "Tombstoned"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeatApprovalStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NotApproved"
+          },
+          {
+            "name": "Approved"
+          },
+          {
+            "name": "Retired"
           }
         ]
       }
@@ -2309,44 +2321,32 @@
       }
     },
     {
-      "name": "MarketStatus",
+      "name": "Side",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "Uninitialized"
+            "name": "Bid"
           },
           {
-            "name": "Active"
-          },
-          {
-            "name": "PostOnly"
-          },
-          {
-            "name": "Paused"
-          },
-          {
-            "name": "Closed"
-          },
-          {
-            "name": "Tombstoned"
+            "name": "Ask"
           }
         ]
       }
     },
     {
-      "name": "SeatApprovalStatus",
+      "name": "SelfTradeBehavior",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "NotApproved"
+            "name": "Abort"
           },
           {
-            "name": "Approved"
+            "name": "CancelProvide"
           },
           {
-            "name": "Retired"
+            "name": "DecrementTake"
           }
         ]
       }

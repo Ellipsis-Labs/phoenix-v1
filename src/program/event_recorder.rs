@@ -12,8 +12,8 @@ use solana_program::{
 };
 
 use super::{
-    assert_with_msg, checkers::MarketAccountInfo, AuditLogHeader, PhoenixError, PhoenixInstruction,
-    PhoenixLogContext, PhoenixMarketContext, PhoenixMarketEvent,
+    assert_with_msg, checkers::phoenix_checkers::MarketAccountInfo, AuditLogHeader, PhoenixError,
+    PhoenixInstruction, PhoenixLogContext, PhoenixMarketContext, PhoenixMarketEvent,
 };
 
 /// The maximum amount of data that can be sent through a CPI is 1280 bytes
@@ -57,7 +57,7 @@ const MAX_EVENT_SIZE: usize = 67;
 /// CPI to the log instruction to log the events and drain the `event_buffer`.
 ///
 /// This enables the program to only have to allocate heap memory once per instruction
-pub struct EventRecorder<'info> {
+pub(crate) struct EventRecorder<'info> {
     phoenix_program: AccountInfo<'info>,
     log_authority: AccountInfo<'info>,
     phoenix_instruction: PhoenixInstruction,
@@ -73,7 +73,7 @@ pub struct EventRecorder<'info> {
 }
 
 impl<'info> EventRecorder<'info> {
-    pub fn new<'a>(
+    pub(crate) fn new<'a>(
         phoenix_log_context: PhoenixLogContext<'a, 'info>,
         phoenix_market_context: &PhoenixMarketContext<'a, 'info>,
         phoenix_instruction: PhoenixInstruction,
@@ -120,7 +120,7 @@ impl<'info> EventRecorder<'info> {
     }
 
     /// Records Phoenix events via CPI
-    pub fn flush(&mut self) -> ProgramResult {
+    pub(crate) fn flush(&mut self) -> ProgramResult {
         let batch_size = self.state_tracker.get_batch_size();
         self.state_tracker.print_status();
         // Store the number of emitted events in the header to more easily decode the events
@@ -143,7 +143,7 @@ impl<'info> EventRecorder<'info> {
     /// Adds a MarketEvent to the current instruction. If the instruction data
     /// length exceeds the maximum inner instruction size, the events are recorded
     /// via CPI
-    pub fn add_event(&mut self, event: MarketEvent<Pubkey>) {
+    pub(crate) fn add_event(&mut self, event: MarketEvent<Pubkey>) {
         if self.error_code.is_some() {
             return;
         }

@@ -56,8 +56,8 @@ pub(crate) fn process_force_cancel_orders<'a, 'info>(
 ) -> ProgramResult {
     let AuthorizedActionContext {
         trader,
-        seat: _,
         vault_context,
+        ..
     } = AuthorizedActionContext::load(market_context, accounts)?;
     process_cancel_orders(
         &market_context.market_info,

@@ -504,10 +504,10 @@ async fn test_phoenix_request_seats() {
 }
 
 async fn get_sequence_number(client: &EllipsisClient, market: &Pubkey) -> u64 {
-    let mut market_data = client.get_account(market).await.unwrap().data;
-    let (header_bytes, bytes) = market_data.split_at_mut(size_of::<MarketHeader>());
+    let market_data = client.get_account(market).await.unwrap().data;
+    let (header_bytes, bytes) = market_data.split_at(size_of::<MarketHeader>());
     let header = Box::new(MarketHeader::load_bytes(header_bytes).unwrap());
-    let full_market = load_with_dispatch_mut(&header.market_size_params, bytes).unwrap();
+    let full_market = load_with_dispatch(&header.market_size_params, bytes).unwrap();
     full_market.inner.get_sequence_number()
 }
 
@@ -1578,12 +1578,12 @@ async fn test_phoenix_fees() {
     assert_eq!(quote_balance_end, 0);
     assert_eq!(fee_dest_balance - fee_dest_start, 50000);
 
-    let mut market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
+    let market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
         .await
         .unwrap();
-    let (header_bytes, bytes) = market_account_data.split_at_mut(size_of::<MarketHeader>());
+    let (header_bytes, bytes) = market_account_data.split_at(size_of::<MarketHeader>());
     let header = MarketHeader::load_bytes(header_bytes).unwrap();
-    let market = load_with_dispatch_mut(&header.market_size_params, bytes)
+    let market = load_with_dispatch(&header.market_size_params, bytes)
         .unwrap()
         .inner;
     assert_eq!(
@@ -1644,8 +1644,8 @@ async fn test_phoenix_cancel_with_free_funds() {
         .unwrap();
 
     let market_state = sdk.get_market_state().await;
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 
     let order_packet = OrderPacket::new_limit_order(
         Side::Bid,
@@ -1670,7 +1670,7 @@ async fn test_phoenix_cancel_with_free_funds() {
         .unwrap();
 
     let market_state = sdk.get_market_state().await;
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(!market_state.orderbook.bids.is_empty());
     assert!(
         market_state.traders[&trader].quote_lots_free
@@ -1717,8 +1717,8 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 
     sdk.client
         .sign_send_instructions(
@@ -1744,7 +1744,7 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(!market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(
         market_state.traders[&trader].quote_lots_free
             == quote_lots.as_u64()
@@ -1773,8 +1773,8 @@ async fn test_phoenix_cancel_with_free_funds() {
 
     let market_state = sdk.get_market_state().await;
     assert!(market_state.orderbook.bids.is_empty());
-    assert!(market_state.traders[&trader].base_lots_free == base_lots);
-    assert!(market_state.traders[&trader].quote_lots_free == quote_lots);
+    assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
+    assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 }
 
 #[tokio::test]
@@ -3218,7 +3218,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         let bid_params = OrderPacket::new_limit_order(
             Side::Bid,
             sdk.float_price_to_ticks(*bid_price),
-            sdk.raw_base_units_to_base_lots(1000 as f64), // 1_000 tokens, or 1_000 raw_base_units
+            sdk.raw_base_units_to_base_lots(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
             SelfTradeBehavior::Abort,
             None,
             sdk.get_next_client_order_id(),
@@ -3228,7 +3228,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         let ask_params = OrderPacket::new_limit_order(
             Side::Ask,
             sdk.float_price_to_ticks(*ask_price),
-            sdk.raw_base_units_to_base_lots(1000 as f64), // 1_000 tokens, or 1_000 raw_base_units
+            sdk.raw_base_units_to_base_lots(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
             SelfTradeBehavior::Abort,
             None,
             sdk.get_next_client_order_id(),
@@ -3261,9 +3261,9 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         .unwrap();
 
     let first_cross_price = sdk.float_price_to_ticks(*bid_price_range.last().unwrap());
-    let first_cross_size = sdk.raw_base_units_to_base_lots(1000 as f64);
+    let first_cross_size = sdk.raw_base_units_to_base_lots(1000_f64);
     let second_cross_price = sdk.float_price_to_ticks(*bid_price_range.first().unwrap()); // Takes the last price in the bid price_range (40.0)
-    let second_cross_size = sdk.raw_base_units_to_base_lots(1000 as f64);
+    let second_cross_size = sdk.raw_base_units_to_base_lots(1000_f64);
 
     let params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
