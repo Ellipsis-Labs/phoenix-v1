@@ -252,6 +252,14 @@ impl<
         std::mem::size_of::<Self>()
     }
 
+    fn get_taker_fee_bps(&self) -> u64 {
+        self.taker_fee_bps
+    }
+
+    fn get_tick_size(&self) -> QuoteLotsPerBaseUnitPerTick {
+        self.tick_size_in_quote_lots_per_base_unit
+    }
+
     fn get_base_lots_per_base_unit(&self) -> BaseLotsPerBaseUnit {
         self.base_lots_per_base_unit
     }

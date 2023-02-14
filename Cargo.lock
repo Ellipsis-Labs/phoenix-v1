@@ -2544,7 +2544,7 @@ dependencies = [
 
 [[package]]
 name = "phoenix-v1"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "borsh 0.9.3",
  "bytemuck",
