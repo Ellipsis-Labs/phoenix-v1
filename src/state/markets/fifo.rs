@@ -790,7 +790,6 @@ impl<
 
             // If the trader is a registered trader, check if they have free lots
             if trader_index != u32::MAX {
-                // This constant needs to be copied because we mutably borrow below
                 let trader_state = self.get_trader_state_from_index_mut(trader_index);
                 match side {
                     Side::Bid => {
