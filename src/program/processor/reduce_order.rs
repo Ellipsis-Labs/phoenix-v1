@@ -27,6 +27,7 @@ pub struct CancelOrderParams {
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy)]
 pub struct ReduceOrderParams {
     pub base_params: CancelOrderParams,
+    /// Size of the order to reduce in base lots
     pub size: u64,
 }
 
