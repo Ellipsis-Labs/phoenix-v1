@@ -161,7 +161,7 @@ pub fn create_evict_seat_instruction(
             AccountMeta::new_readonly(phoenix_log_authority::id(), false),
             AccountMeta::new(*market, false),
             AccountMeta::new_readonly(*authority, true),
-            AccountMeta::new(*trader, false),
+            AccountMeta::new_readonly(*trader, false),
             AccountMeta::new_readonly(seat, false),
             AccountMeta::new(base_account, false),
             AccountMeta::new(quote_account, false),
