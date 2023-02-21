@@ -610,7 +610,14 @@
           "desc": "Token program"
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": "CancelMultipleOrdersByIdParams"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 10
@@ -643,7 +650,14 @@
           "isSigner": true
         }
       ],
-      "args": [],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": "CancelMultipleOrdersByIdParams"
+          }
+        }
+      ],
       "discriminant": {
         "type": "u8",
         "value": 11
