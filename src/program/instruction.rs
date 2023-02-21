@@ -200,32 +200,32 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "successor", desc = "The successor account must sign to claim authority")]
     ClaimAuthority = 101,
 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to name successor")]
     NameSuccessor = 102,
 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to change market status")]
     ChangeMarketStatus = 103,
 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to change seat status")]
     #[account(4, writable, name = "seat")]
     ChangeSeatStatus = 104,
 
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to request a seat on behalf of a trader")]
     #[account(4, writable, signer, name = "payer")]
     #[account(5, name = "trader")]
     #[account(6, writable, name = "seat")]
@@ -235,7 +235,7 @@ pub enum PhoenixInstruction {
     #[account(0, name = "phoenix_program", desc = "Phoenix program")]
     #[account(1, name = "log_authority", desc = "Phoenix log authority")]
     #[account(2, writable, name = "market", desc = "This account holds the market state")]
-    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to claim authority")]
+    #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to evict a seat")]
     #[account(4, name = "trader")]
     #[account(5, name = "seat", desc = "The trader's PDA seat account, seeds are [b'seat', market_address, trader_address]")]
     #[account(6, writable, name = "base_account")]

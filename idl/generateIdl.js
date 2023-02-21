@@ -113,6 +113,17 @@ function mutateIdl() {
         },
       });
     }
+    if (
+      instruction.name === "CancelMultipleOrdersById" ||
+      instruction.name === "CancelMultipleOrdersByIdWithFreeFunds"
+    ) {
+      instruction.args.push({
+        name: "params",
+        type: {
+          defined: "CancelMultipleOrdersByIdParams"
+        },
+      });
+    }
     if (instruction.name === "DepositFunds") {
       instruction.args.push({
         name: "depositFundsParams",
