@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.4",
   "name": "phoenix_v1",
   "instructions": [
     {
@@ -1073,10 +1073,10 @@
           "desc": "This account holds the market state"
         },
         {
-          "name": "marketAuthority",
+          "name": "successor",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The successor account must sign to claim authority"
         }
       ],
       "args": [],
@@ -1110,7 +1110,7 @@
           "name": "marketAuthority",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The market_authority account must sign to name successor"
         }
       ],
       "args": [
@@ -1149,7 +1149,7 @@
           "name": "marketAuthority",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The market_authority account must sign to change market status"
         }
       ],
       "args": [
@@ -1190,7 +1190,7 @@
           "name": "marketAuthority",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The market_authority account must sign to change seat status"
         },
         {
           "name": "seat",
@@ -1236,7 +1236,7 @@
           "name": "marketAuthority",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The market_authority account must sign to request a seat on behalf of a trader"
         },
         {
           "name": "payer",
@@ -1291,7 +1291,7 @@
           "name": "marketAuthority",
           "isMut": false,
           "isSigner": true,
-          "desc": "The market_authority account must sign to claim authority"
+          "desc": "The market_authority account must sign to evict a seat"
         },
         {
           "name": "trader",
