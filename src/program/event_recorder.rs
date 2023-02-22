@@ -16,8 +16,7 @@ use super::{
     PhoenixInstruction, PhoenixLogContext, PhoenixMarketContext, PhoenixMarketEvent,
 };
 
-/// The maximum amount of data that can be sent through a CPI is 1280 bytes, but we
-/// apply extra precaution
+/// The maximum amount of data that can be sent through a CPI is 1280 bytes
 const MAX_INNER_INSTRUCTION_SIZE: usize = 1280;
 
 /// The number of bytes in a single AccountMeta struct
