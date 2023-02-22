@@ -16,8 +16,12 @@ use super::{
     PhoenixInstruction, PhoenixLogContext, PhoenixMarketContext, PhoenixMarketEvent,
 };
 
-/// The maximum amount of data that can be sent through a CPI is 1280 bytes
+/// The maximum amount of data that can be sent through a CPI is 1280 bytes, but we
+/// apply extra precaution
 const MAX_INNER_INSTRUCTION_SIZE: usize = 1280;
+
+/// The number of bytes in a single AccountMeta struct
+const LOG_IX_ACCOUNT_META_SIZE: usize = 34;
 
 /// The header is used to decode the events from the client side
 /// It contains the following metadata:
@@ -165,7 +169,8 @@ impl<'info> EventRecorder<'info> {
 
         // Flush the buffer if the data length exceeds the maximum inner instruction size
         let data_len = self.log_instruction.data.len() + self.scratch_buffer.len();
-        if data_len > MAX_INNER_INSTRUCTION_SIZE && self.flush().is_err() {
+        if data_len + LOG_IX_ACCOUNT_META_SIZE > MAX_INNER_INSTRUCTION_SIZE && self.flush().is_err()
+        {
             // This should never happen because the program should terminate in `self.flush` before
             // fully evaluating the condition above
             self.error_code = Some(PhoenixError::FailedToFlushBuffer);
