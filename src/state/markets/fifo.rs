@@ -969,7 +969,7 @@ impl<
                 Side::Bid => fifo_order_id.price_in_ticks >= placed_order_id.price_in_ticks,
                 Side::Ask => fifo_order_id.price_in_ticks <= placed_order_id.price_in_ticks,
             } {
-                println!("New order is not aggressive enough to evict an existing order");
+                phoenix_log!("New order is not aggressive enough to evict an existing order");
                 return None;
             }
             self.get_book_mut(side).remove(&fifo_order_id)?;
