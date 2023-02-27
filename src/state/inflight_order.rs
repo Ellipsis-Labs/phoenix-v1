@@ -16,12 +16,12 @@ pub(crate) struct InflightOrder {
     /// Number of orders to match against.
     pub match_limit: u64,
 
-    /// Available lots to fill against the order book adjusted for fees. If max_lots is not set,
+    /// Available lots to fill against the order book adjusted for fees. If num_base_lots is not set in the `OrderPacket`,
     /// this will be unbounded
     pub base_lot_budget: BaseLots,
 
-    /// Available adjusted quote lots to fill against the order book adjusted for fees. If max_adjusted quote lots is not set,
-    /// this will be unbounded
+    /// Available adjusted quote lots to fill against the order book adjusted for fees. If `num_quote_lots` is not set
+    /// in the `OrderPacket`, this will be unbounded
     pub adjusted_quote_lot_budget: AdjustedQuoteLots,
 
     /// Number of lots matched in the trade

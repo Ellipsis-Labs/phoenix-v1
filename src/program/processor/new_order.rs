@@ -305,12 +305,10 @@ fn process_new_order<'a, 'info>(
     ) = {
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
-        // Copies the order_packet onto the stack to start or continue matching
         let (_order_id, matching_engine_response) = market
             .place_order(trader.key, *order_packet, record_event_fn)
             .ok_or(PhoenixError::NewOrderError)?;
 
-        // Update intermediate matched values
         (
             matching_engine_response.num_quote_lots_out * quote_lot_size,
             matching_engine_response.get_deposit_amount_bid_in_quote_lots() * quote_lot_size,

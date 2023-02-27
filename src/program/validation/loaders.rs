@@ -1,10 +1,12 @@
 //! This file contains all of the code that is used to load and validate account
-//! data. Each loader struct describes specific account types and constraints
-//! that must be met for the instruction data to be valid. Each AccountInfo is checked
-//! according to a particular checker struct and if the account data is invalid, an error is
-//! returned and the instruction will fail.
+//! and instruction data.
 //!
-//! The loader structs are used to validate the accounts in the instruction data
+//! Each loader describes specific account types and constraints that must be met for
+//! the instruction data to be valid. Each AccountInfo is checked according to a particular
+//! checker struct and if the account data is invalid, an error is returned and the instruction will fail.
+//!
+//! The loader structs are used to validate the accounts passed into the program based on the
+//! current instruction.
 
 use super::checkers::{
     phoenix_checkers::{MarketAccountInfo, SeatAccountInfo},

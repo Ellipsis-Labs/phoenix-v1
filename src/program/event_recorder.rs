@@ -65,7 +65,7 @@ pub(crate) struct EventRecorder<'info> {
     log_authority: AccountInfo<'info>,
     phoenix_instruction: PhoenixInstruction,
 
-    /// This buffer is used to serialize the events without allocating new heap memory
+    /// This buffer is used to serialize new market events without allocating new heap memory
     scratch_buffer: Vec<u8>,
     /// This instruction template is reused for each log CPI
     pub log_instruction: Instruction,
@@ -122,7 +122,7 @@ impl<'info> EventRecorder<'info> {
         })
     }
 
-    /// Records Phoenix events via CPI
+    /// Records Phoenix events via self CPI
     pub(crate) fn flush(&mut self) -> ProgramResult {
         let batch_size = self.state_tracker.get_batch_size();
         self.state_tracker.print_status();
@@ -144,8 +144,8 @@ impl<'info> EventRecorder<'info> {
     }
 
     /// Adds a MarketEvent to the current instruction. If the instruction data
-    /// length exceeds the maximum inner instruction size, the events are recorded
-    /// via CPI
+    /// length will exceed the maximum inner instruction size after added the new event, the
+    /// existing events are recorded via CPI
     pub(crate) fn add_event(&mut self, event: MarketEvent<Pubkey>) {
         if self.error_code.is_some() {
             return;
@@ -154,19 +154,19 @@ impl<'info> EventRecorder<'info> {
         let mut event = PhoenixMarketEvent::from(event);
         event.set_index(self.state_tracker.events_added);
 
-        // This should always be false, but we check just in case
+        // This should always be false
         if !self.scratch_buffer.is_empty() {
             self.error_code = Some(PhoenixError::NonEmptyScratchBuffer);
             return;
         }
 
-        // This should always be false, but we check just in case
+        // This should always be false
         if event.serialize(&mut self.scratch_buffer).is_err() {
             self.error_code = Some(PhoenixError::FailedToSerializeEvent);
             return;
         }
 
-        // Flush the buffer if the data length exceeds the maximum inner instruction size
+        // Flushes the buffer if the data length exceeds the maximum inner instruction size
         let data_len = self.log_instruction.data.len() + self.scratch_buffer.len();
         if data_len + LOG_IX_ACCOUNT_META_SIZE > MAX_INNER_INSTRUCTION_SIZE && self.flush().is_err()
         {
@@ -179,7 +179,7 @@ impl<'info> EventRecorder<'info> {
             .data
             .extend_from_slice(&self.scratch_buffer);
         self.state_tracker.add_event();
-        // We drain the buffer to avoid having to reallocate memory
+        // Drains the buffer to avoid having to reallocate memory
         self.scratch_buffer.drain(..);
     }
 
@@ -189,6 +189,7 @@ impl<'info> EventRecorder<'info> {
         market_info: MarketAccountInfo<'_, 'info>,
     ) -> ProgramResult {
         if let Some(err) = self.error_code {
+            // This should never happen because the program should have terminiated in `self.add_event`
             phoenix_log!("ERROR: Event recorder failed to record events: {}", err);
             return Err(err.into());
         }

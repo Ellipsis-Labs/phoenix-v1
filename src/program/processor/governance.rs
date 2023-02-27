@@ -18,8 +18,8 @@ use solana_program::{
     pubkey::Pubkey, system_program,
 };
 
-/// This action can be taken by the market authority to remove the seat of a
-/// trader whose seat is no longer approved
+/// This action can be taken by the market authority to remove the seat (on the Market account) of a
+/// trader whose Seat account is no longer approved
 ///
 /// It will also withdraw all funds to token accounts owned by the trader, but it will fail
 /// if the trader has any open orders.
@@ -83,8 +83,8 @@ pub(crate) fn process_claim_authority<'a, 'info>(
     Ok(())
 }
 
-/// The authority can be changed to a successor, but the successor must go into
-/// explicitly claim the authority from the previous market authority
+/// The authority can be changed to a successor, but the successor must explicitly claim the 
+/// authority from the previous market authority
 pub(crate) fn process_name_successor<'a, 'info>(
     _program_id: &Pubkey,
     market_context: &PhoenixMarketContext<'a, 'info>,

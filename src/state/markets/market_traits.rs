@@ -45,8 +45,8 @@ pub trait RestingOrder {
     fn size(&self) -> u64;
 }
 
-/// A wrapper around an matching algorithm implementation that allows the specific struct to be
-/// used as a generic market.
+/// A wrapper around an matching algorithm implementation that allows arbitrary structs to be
+/// used as generic markets.
 pub trait Market<
     MarketTraderId: BorshDeserialize + BorshSerialize + Copy,
     MarketOrderId: OrderId,
