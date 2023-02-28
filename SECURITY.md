@@ -63,7 +63,7 @@ The bug bounty program is administered by Ellipsis Labs and OtterSec. All bug bo
   </tbody>
 </table>
 
-Bugs in `phoenix-sdk` and other code away from the smart contract will be assessed on a case-by-case basis.
+Bugs in `phoenix-sdk` and other code outside of the smart contract will be assessed on a case-by-case basis.
 
 ## Report Submission
 
