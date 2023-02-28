@@ -1,4 +1,4 @@
-///! These types are unused in the program, but are used by the IDL
+///! These types are unused in the program, but are used to generate the IDL.
 ///! The program uses explicit types for all quantities, but these unit types
 ///! will not be exposed to the client.
 ///!

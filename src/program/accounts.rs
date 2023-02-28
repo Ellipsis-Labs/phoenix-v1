@@ -111,7 +111,6 @@ impl MarketHeader {
     }
 
     /// Converts a price from quote atoms per base unit to ticks.
-    /// TODO: should probably have an option to round up or round down
     pub fn price_in_ticks(&self, price: u64) -> u64 {
         price / self.tick_size_in_quote_atoms_per_base_unit.as_u64()
     }
@@ -134,7 +133,7 @@ impl MarketHeader {
 }
 
 /// This struct represents the state of a seat. Only traders with seats can
-/// place limit orders on the exchange. The seat is valid when the approval_status
+/// place limit orders on the market. The seat is valid when the approval_status
 /// field is set to Approved. The initial state is NotApproved, and the seat will
 /// be retired if it is a Retired state.
 #[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize, Zeroable, Pod)]

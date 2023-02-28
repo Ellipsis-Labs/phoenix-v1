@@ -25,7 +25,7 @@ use std::fmt::Debug;
 #[derive(Eq, PartialEq, Debug, Default, Copy, Clone, Zeroable, Pod)]
 pub struct FIFOOrderId {
     /// The price of the order, in ticks. Each market has a designated
-    /// tick size (some number of quote lots) that is used to convert the price to quote ticks per base unit.
+    /// tick size (some number of quote lots per base unit) that is used to convert the price to ticks.
     /// For example, if the tick size is 0.01, then a price of 1.23 is converted to 123 ticks.
     /// If the quote lot size is 0.001, this means that there is a spacing of 10 quote lots
     /// in between each tick.
@@ -66,7 +66,7 @@ impl FIFOOrderId {
 
 impl PartialOrd for FIFOOrderId {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        // The order of the orders is determined by the price of the order. If the price is the same,
+        // The ordering of the `FIFOOrderId` struct is determined by the price of the order. If the price is the same,
         // then the order with the lower sequence number is considered to be the lower order.
         //
         // Asks are sorted in ascending order, and bids are sorted in descending order.
@@ -151,7 +151,7 @@ pub struct FIFOMarket<
     /// The sequence number of the next event.
     order_sequence_number: u64,
 
-    /// There are no maker fees. Taker fees are charged on the amount of the trade in basis points.
+    /// There are no maker fees. Taker fees are charged on the quote lots transacted in the trade, in basis points.
     pub taker_fee_bps: u64,
 
     /// Amount of fees collected from the market in its lifetime, in quote lots.
@@ -907,7 +907,7 @@ impl<
                     self.tick_size_in_quote_lots_per_base_unit;
                 let base_lots_per_base_unit = self.base_lots_per_base_unit;
                 let trader_state = self.get_trader_state_from_index_mut(trader_index);
-                // Update trader stata and matching engine response accordingly
+                // Update trader state and matching engine response accordingly
                 match side {
                     Side::Bid => {
                         let quote_lots_to_lock = (tick_size_in_quote_lots_per_base_unit
@@ -931,7 +931,7 @@ impl<
                     }
                 }
 
-                // Check the trader had enough deposited funds to process the order
+                // Check if trader has enough deposited funds to process the order
                 if order_packet.no_deposit_or_withdrawal()
                     && trader_index != u32::MAX
                     && !matching_engine_response.verify_no_deposit_or_withdrawal()
@@ -1009,7 +1009,7 @@ impl<
             // Find the first order on the opposite side of the book that matches the inflight order.
             let (trader_index, order_id, num_base_lots_quoted) = {
                 let book = self.get_book_mut(inflight_order.side.opposite());
-                // This looks at the top of the book to compare the book's price to the order's price
+                // Look at the top of the book to compare the book's price to the order's price
                 let (
                     crossed,
                     order_id,
@@ -1031,12 +1031,13 @@ impl<
                     phoenix_log!("Book is empty");
                     break;
                 };
-                // When the order no longer crosses the limit price (based on limit_price_in_ticks), stop matching
+                // If the order no longer crosses the limit price (based on limit_price_in_ticks), stop matching
                 if !crossed {
                     break;
                 }
                 if num_base_lots_quoted == BaseLots::ZERO {
                     // This block is entered if we encounter tombstoned orders during the matching process
+                    // (Should never trigger in v1)
                     book.remove(&order_id)?;
                     // The tombstone should count as part of the match limit
                     inflight_order.match_limit -= 1;
@@ -1065,7 +1066,7 @@ impl<
                         )?;
                         if inflight_order.self_trade_behavior == SelfTradeBehavior::DecrementTake {
                             // In the case that the self trade behavior is DecrementTake, we decrement the
-                            // the tick and lot budgets accordingly
+                            // the base lot and adjusted quote lot budgets accordingly
                             inflight_order.base_lot_budget = inflight_order
                                 .base_lot_budget
                                 .saturating_sub(num_base_lots_quoted);
@@ -1122,7 +1123,7 @@ impl<
                         * base_lots_to_remove;
                     let matched_order = book.get_mut(&order_id)?;
                     matched_order.num_base_lots -= base_lots_to_remove;
-                    // If these clause is reached, we make ensure that the loop terminates
+                    // If this clause is reached, we make ensure that the loop terminates
                     // as the order has been fully filled
                     inflight_order.should_terminate = true;
                     (
@@ -1329,7 +1330,7 @@ impl<
             base_lots_to_remove
         };
         let (num_quote_lots, num_base_lots) = {
-            // This constant needs to be copied because we mutably borrow below
+            // These constants need to be copied because we mutably borrow below
             let tick_size_in_quote_lots_per_base_unit = self.tick_size_in_quote_lots_per_base_unit;
             let base_lots_per_base_unit = self.base_lots_per_base_unit;
             let trader_state = self.get_trader_state_from_index_mut(trader_index);

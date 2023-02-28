@@ -20,8 +20,8 @@ use std::{mem::size_of, ops::DerefMut};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InitializeParams {
-    /// These parameters define the number of orders for each side of the market as well as the maximum
-    /// number of supported traders. They are used to deserialize the market state (see `dispatch.rs`).
+    /// These parameters define the number of orders on each side of the market as well as the maximum
+    /// number of supported traders. They are used to deserialize the market state (see `dispatch_market.rs`).
     pub market_size_params: MarketSizeParams,
 
     /// Number of quote lots to make up a full quote unit. Quote lots are the smallest measurement for
@@ -56,7 +56,12 @@ pub struct InitializeParams {
     /// The Pubkey of the account that will receive fees for this market.
     pub fee_collector: Pubkey,
 
-    /// Raw base unit is one whole unit (token) of the base token. A BaseUnit within Phoenix comprises a number of raw base units as defined by this field.
+    /// 1 raw base unit is defined as 10^base_mint_decimals atoms.
+    /// By default, raw_base_units_per_base_unit is set to 1 (if the Option is passed in as `None`).
+    /// It is highly recommended to be a power of 10.
+    ///
+    /// If this parameter is supplied, the market will treat the number of base atoms in a base unit as
+    /// `(10^base_mint_decimals) * raw_base_units_per_base_unit`.
     pub raw_base_units_per_base_unit: Option<u32>,
 }
 
