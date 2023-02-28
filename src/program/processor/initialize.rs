@@ -56,8 +56,9 @@ pub struct InitializeParams {
     /// The Pubkey of the account that will receive fees for this market.
     pub fee_collector: Pubkey,
 
-    /// Raw base unit is one whole unit (token) of the base token as described by the mint decimals.
-    /// By default, this is set to 1 (if the Option is passed in as `None`). It is highly recommended to be a power of 10.
+    /// 1 raw base unit is defined as 10^base_mint_decimals atoms.
+    /// By default, raw_base_units_per_base_unit is set to 1 (if the Option is passed in as `None`).
+    /// It is highly recommended to be a power of 10.
     ///
     /// If this parameter is supplied, the market will treat the number of base atoms in a base unit as
     /// `(10^base_mint_decimals) * raw_base_units_per_base_unit`.

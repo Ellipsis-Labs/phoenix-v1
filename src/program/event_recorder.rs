@@ -122,7 +122,7 @@ impl<'info> EventRecorder<'info> {
         })
     }
 
-    /// Records Phoenix events via self CPI
+    /// Records Phoenix events via self-CPI
     pub(crate) fn flush(&mut self) -> ProgramResult {
         let batch_size = self.state_tracker.get_batch_size();
         self.state_tracker.print_status();
@@ -144,8 +144,8 @@ impl<'info> EventRecorder<'info> {
     }
 
     /// Adds a MarketEvent to the current instruction. If the instruction data
-    /// length will exceed the maximum inner instruction size after added the new event, the
-    /// existing events are recorded via CPI
+    /// length will exceed the maximum inner instruction size after adding the new event, the
+    /// existing events are flushed and recorded via CPI
     pub(crate) fn add_event(&mut self, event: MarketEvent<Pubkey>) {
         if self.error_code.is_some() {
             return;

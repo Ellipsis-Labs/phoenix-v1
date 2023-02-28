@@ -21,7 +21,7 @@ pub(crate) struct InflightOrder {
     pub base_lot_budget: BaseLots,
 
     /// Available adjusted quote lots to fill against the order book adjusted for fees. If `num_quote_lots` is not set
-    /// in the `OrderPacket`, this will be unbounded
+    /// in the OrderPacket, this will be unbounded
     pub adjusted_quote_lot_budget: AdjustedQuoteLots,
 
     /// Number of lots matched in the trade

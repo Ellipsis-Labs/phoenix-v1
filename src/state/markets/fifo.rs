@@ -151,7 +151,7 @@ pub struct FIFOMarket<
     /// The sequence number of the next event.
     order_sequence_number: u64,
 
-    /// There are no maker fees. Taker fees are charged on the quote lots transacted in the trade in basis points.
+    /// There are no maker fees. Taker fees are charged on the quote lots transacted in the trade, in basis points.
     pub taker_fee_bps: u64,
 
     /// Amount of fees collected from the market in its lifetime, in quote lots.
