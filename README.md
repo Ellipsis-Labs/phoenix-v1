@@ -20,7 +20,13 @@ Information on the bug bounty program for Phoenix can be found at [SECURITY.md](
 
 ### Build Verification
 
-To verify the build, see WIP WIP WIP
+You can use [Solana Verify CLI](https://github.com/Ellipsis-Labs/solana-verifiable-build) to verify that the program deployed at `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` matches the code in this repository. After installing the CLI, run:
+
+```
+solana-verify verify-from-repo -um --program-id PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY https://github.com/Ellipsis-Labs/phoenix-v1
+```
+
+This may take awhile as it builds the program inside Docker, then verifies that the build hash matches the deployed program hash. The verification process is much faster on a non-ARM machine.
 
 ### Building and Testing Locally
 
