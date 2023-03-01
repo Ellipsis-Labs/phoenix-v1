@@ -33,14 +33,12 @@ This may take awhile as it builds the program inside Docker, then verifies that 
 To build the contract, run:
 
 ```
-cd program
 ./build.sh
 ```
 
 To run the tests, run:
 
 ```
-cd program
 ./test.sh
 ```
 
