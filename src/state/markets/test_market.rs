@@ -155,7 +155,7 @@ fn test_market_simple() {
     ) = market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Bid,
                 price.as_u64(),
                 size.as_u64(),
@@ -194,7 +194,7 @@ fn test_market_simple() {
     ) = market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 price.as_u64(),
                 size.as_u64(),
@@ -222,7 +222,7 @@ fn test_market_simple() {
     market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 ladder.asks[0].price_in_ticks.as_u64(),
                 ladder.asks[0].size_in_base_lots.as_u64(),
@@ -264,7 +264,7 @@ fn test_market_simple() {
     ) = market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 price.as_u64(),
                 size.as_u64(),
@@ -903,7 +903,7 @@ fn test_orders_with_only_free_funds() {
     assert!(market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 100,
                 5,
@@ -919,7 +919,7 @@ fn test_orders_with_only_free_funds() {
     assert!(market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 100,
                 5,
@@ -985,7 +985,7 @@ fn test_orders_with_only_free_funds() {
     assert!(market
         .place_order(
             &trader,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Bid,
                 100,
                 6,
@@ -1615,6 +1615,118 @@ fn test_fok_with_slippage_3() {
 }
 
 #[test]
+fn test_exact_out_order() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = setup_market_with_params(10000, 100, 2);
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let maker = rng.gen::<u128>();
+    let bid_start = rng.gen_range(9996, 10_000);
+    let bid_end = rng.gen_range(9900, 9978);
+    let ask_start = rng.gen_range(10_001, 10_005);
+    let ask_end = rng.gen_range(10_033, 10_100);
+    let start_size = rng.gen_range(10, 20);
+    let size_step = rng.gen_range(1, 5);
+    layer_orders(
+        &mut market,
+        maker,
+        bid_start,
+        bid_end,
+        1,
+        start_size,
+        size_step,
+        Side::Bid,
+        &mut record_event_fn,
+    );
+    layer_orders(
+        &mut market,
+        maker,
+        ask_start,
+        ask_end,
+        1,
+        start_size,
+        size_step,
+        Side::Ask,
+        &mut record_event_fn,
+    );
+
+    let ladder = market.get_typed_ladder(5);
+    let taker = rng.gen::<u128>();
+
+    // Send IOC buy order specifying exact number of base lots out
+    let price = ladder.asks[0].price_in_ticks;
+    let base_lots_to_fill = BaseLots::new(ladder.asks[0].size_in_base_lots.as_u64() / 2); // don't take the whole level
+
+    let (
+        _,
+        MatchingEngineResponse {
+            num_quote_lots_in: num_quote_lots,
+            num_base_lots_out: num_base_lots,
+            ..
+        },
+    ) = market
+        .place_order(
+            &taker,
+            OrderPacket::new_ioc_by_base_lots(
+                Side::Bid,
+                price.as_u64() + 10, // supply limit price higher than the best ask
+                base_lots_to_fill.as_u64(),
+                SelfTradeBehavior::DecrementTake,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+        )
+        .unwrap();
+
+    // check that the exact number of base lots was filled, and that they were filled at the expected price
+    assert_eq!(base_lots_to_fill, num_base_lots);
+    assert_eq!(
+        num_quote_lots * market.base_lots_per_base_unit,
+        market.tick_size_in_quote_lots_per_base_unit * price * base_lots_to_fill
+    );
+
+    // Send IOC sell order specifying exact number of quote lots out
+    let price = ladder.bids[0].price_in_ticks;
+    let mut quote_lots_to_fill =
+        market.tick_size_in_quote_lots_per_base_unit * price * ladder.bids[0].size_in_base_lots
+            / market.base_lots_per_base_unit;
+    quote_lots_to_fill = QuoteLots::new(quote_lots_to_fill.as_u64() / 2); // don't take the whole level
+
+    let (
+        _,
+        MatchingEngineResponse {
+            num_quote_lots_out: num_quote_lots,
+            num_base_lots_in: num_base_lots,
+            ..
+        },
+    ) = market
+        .place_order(
+            &taker,
+            OrderPacket::new_ioc_by_quote_lots(
+                Side::Ask,
+                price.as_u64() - 10, // supply limit price lower than the best bid
+                quote_lots_to_fill.as_u64(),
+                SelfTradeBehavior::DecrementTake,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+        )
+        .unwrap();
+
+    // check that the exact number of quote lots was filled, and that they were filled at the expected price
+    assert_eq!(quote_lots_to_fill, num_quote_lots);
+    assert_eq!(
+        num_quote_lots * market.base_lots_per_base_unit,
+        market.tick_size_in_quote_lots_per_base_unit * price * num_base_lots
+    );
+}
+
+#[test]
 fn test_fees_basic() {
     let mut rng = StdRng::seed_from_u64(2);
     let taker_bps = 5;
@@ -1649,7 +1761,7 @@ fn test_fees_basic() {
     let (o_id, release_quantities) = market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Bid,
                 10100,
                 10,
@@ -1675,7 +1787,7 @@ fn test_fees_basic() {
     let (o_id, release_quantities) = market
         .place_order(
             &taker,
-            OrderPacket::new_ioc_by_lots(
+            OrderPacket::new_ioc_by_base_lots(
                 Side::Ask,
                 9900,
                 10,
