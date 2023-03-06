@@ -103,15 +103,57 @@ impl Ord for FIFOOrderId {
 pub struct FIFORestingOrder {
     pub trader_index: u64,
     pub num_base_lots: BaseLots, // Number of base lots quoted
-    _padding: [u64; 2],
+    pub last_valid_slot: u64,
+    pub last_valid_unix_timestamp_in_seconds: u64,
 }
 
 impl FIFORestingOrder {
-    pub fn new(trader_index: u64, num_base_lots: BaseLots) -> Self {
+    pub fn new_default(trader_index: u64, num_base_lots: BaseLots) -> Self {
         FIFORestingOrder {
             trader_index,
             num_base_lots,
-            _padding: [0; 2],
+            last_valid_slot: 0,
+            last_valid_unix_timestamp_in_seconds: 0,
+        }
+    }
+
+    pub fn new(
+        trader_index: u64,
+        num_base_lots: BaseLots,
+        last_valid_slot: u64,
+        last_valid_unix_timestamp_in_seconds: u64,
+    ) -> Self {
+        FIFORestingOrder {
+            trader_index,
+            num_base_lots,
+            last_valid_slot,
+            last_valid_unix_timestamp_in_seconds,
+        }
+    }
+
+    pub fn new_with_last_valid_slot(
+        trader_index: u64,
+        num_base_lots: BaseLots,
+        last_valid_slot: u64,
+    ) -> Self {
+        FIFORestingOrder {
+            trader_index,
+            num_base_lots,
+            last_valid_slot,
+            last_valid_unix_timestamp_in_seconds: 0,
+        }
+    }
+
+    pub fn new_with_last_valid_unix_timestamp(
+        trader_index: u64,
+        num_base_lots: BaseLots,
+        last_valid_unix_timestamp_in_seconds: u64,
+    ) -> Self {
+        FIFORestingOrder {
+            trader_index,
+            num_base_lots,
+            last_valid_slot: 0,
+            last_valid_unix_timestamp_in_seconds,
         }
     }
 }
@@ -373,8 +415,9 @@ impl<
         trader_id: &MarketTraderId,
         order_packet: OrderPacket,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+        get_clock_fn: &mut dyn FnMut() -> (u64, u64),
     ) -> Option<(Option<FIFOOrderId>, MatchingEngineResponse)> {
-        self.place_order_inner(trader_id, order_packet, record_event_fn)
+        self.place_order_inner(trader_id, order_packet, record_event_fn, get_clock_fn)
     }
 
     fn reduce_order(
@@ -644,6 +687,7 @@ impl<
         trader_id: &MarketTraderId,
         mut order_packet: OrderPacket,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+        get_clock_fn: &mut dyn FnMut() -> (u64, u64),
     ) -> Option<(Option<FIFOOrderId>, MatchingEngineResponse)> {
         if self.order_sequence_number == 0 {
             phoenix_log!("Market is uninitialized");
@@ -697,6 +741,13 @@ impl<
             }
         }
 
+        let (current_slot, current_unix_timestamp) = get_clock_fn();
+
+        if order_packet.is_expired(current_slot, current_unix_timestamp) {
+            phoenix_log!("Order parameters are expired, skipping matching and posting");
+            return None;
+        }
+
         let (resting_order, mut matching_engine_response) = if let OrderPacket::PostOnly {
             price_in_ticks,
             reject_post_only,
@@ -726,7 +777,12 @@ impl<
             }
 
             (
-                FIFORestingOrder::new(trader_index as u64, order_packet.num_base_lots()),
+                FIFORestingOrder::new(
+                    trader_index as u64,
+                    order_packet.num_base_lots(),
+                    order_packet.get_last_valid_slot(),
+                    order_packet.get_last_valid_unix_timestamp_in_seconds(),
+                ),
                 MatchingEngineResponse::default(),
             )
         } else {
@@ -750,9 +806,17 @@ impl<
                 order_packet.match_limit(),
                 base_lot_budget,
                 adjusted_quote_lot_budget,
+                order_packet.get_last_valid_slot(),
+                order_packet.get_last_valid_unix_timestamp_in_seconds(),
             );
             let resting_order = self
-                .match_order(&mut inflight_order, trader_index, record_event_fn)
+                .match_order(
+                    &mut inflight_order,
+                    trader_index,
+                    record_event_fn,
+                    current_slot,
+                    current_unix_timestamp,
+                )
                 .map_or_else(
                     || {
                         phoenix_log!("Encountered error matching order");
@@ -1003,11 +1067,19 @@ impl<
         inflight_order: &mut InflightOrder,
         current_trader_index: u32,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+        current_slot: u64,
+        current_unix_timestamp: u64,
     ) -> Option<FIFORestingOrder> {
         let mut total_matched_adjusted_quote_lots = AdjustedQuoteLots::ZERO;
         while inflight_order.in_progress() {
             // Find the first order on the opposite side of the book that matches the inflight order.
-            let (trader_index, order_id, num_base_lots_quoted) = {
+            let (
+                trader_index,
+                order_id,
+                num_base_lots_quoted,
+                slot_expiration,
+                unix_timestamp_expiration,
+            ) = {
                 let book = self.get_book_mut(inflight_order.side.opposite());
                 // Look at the top of the book to compare the book's price to the order's price
                 let (
@@ -1016,7 +1088,8 @@ impl<
                     FIFORestingOrder {
                         trader_index,
                         num_base_lots: num_base_lots_quoted,
-                        ..
+                        last_valid_slot: slot_expiration,
+                        last_valid_unix_timestamp_in_seconds: unix_timestamp_expiration,
                     },
                 ) = if let Some((o_id, quote)) = book.get_min() {
                     (
@@ -1043,8 +1116,31 @@ impl<
                     inflight_order.match_limit -= 1;
                     continue;
                 }
-                (trader_index, order_id, num_base_lots_quoted)
+                (
+                    trader_index,
+                    order_id,
+                    num_base_lots_quoted,
+                    slot_expiration,
+                    unix_timestamp_expiration,
+                )
             };
+
+            if (slot_expiration != 0 && slot_expiration < current_slot)
+                || (unix_timestamp_expiration != 0
+                    && unix_timestamp_expiration < current_unix_timestamp)
+            {
+                // This block is entered if the order has expired
+                self.reduce_order_inner(
+                    trader_index as u32,
+                    &order_id,
+                    inflight_order.side.opposite(),
+                    None,
+                    false,
+                    record_event_fn,
+                )?;
+                inflight_order.match_limit -= 1;
+                continue;
+            }
 
             // Handle self trade
             if trader_index == current_trader_index as u64 {
@@ -1172,6 +1268,8 @@ impl<
         Some(FIFORestingOrder::new(
             current_trader_index as u64,
             inflight_order.base_lot_budget,
+            inflight_order.last_valid_slot,
+            inflight_order.last_valid_unix_timestamp_in_seconds,
         ))
     }
 

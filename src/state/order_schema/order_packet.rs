@@ -41,6 +41,12 @@ pub enum OrderPacket {
         /// Using only deposited funds will allow the trader to pass in less accounts per instruction and
         /// save transaction space as well as compute. This is only for traders who have a seat
         use_only_deposited_funds: bool,
+
+        /// If this is set, the order will be invalid after the specified slot
+        last_valid_slot: Option<u64>,
+
+        /// If this is set, the order will be invalid after the specified unix timestamp
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     },
 
     /// This order type is used to place a limit order on the book
@@ -68,6 +74,12 @@ pub enum OrderPacket {
         /// Using only deposited funds will allow the trader to pass in less accounts per instruction and
         /// save transaction space as well as compute. This is only for traders who have a seat
         use_only_deposited_funds: bool,
+
+        /// If this is set, the order will be invalid after the specified slot
+        last_valid_slot: Option<u64>,
+
+        /// If this is set, the order will be invalid after the specified unix timestamp
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     },
 
     /// This order type is used to place an order that will be matched against existing resting orders
@@ -169,6 +181,8 @@ impl OrderPacket {
             client_order_id: 0,
             reject_post_only: true,
             use_only_deposited_funds: false,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
         }
     }
 
@@ -185,6 +199,8 @@ impl OrderPacket {
             client_order_id,
             reject_post_only: true,
             use_only_deposited_funds: false,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
         }
     }
 
@@ -201,6 +217,8 @@ impl OrderPacket {
             client_order_id,
             reject_post_only: false,
             use_only_deposited_funds: false,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
         }
     }
 
@@ -219,6 +237,8 @@ impl OrderPacket {
             client_order_id,
             reject_post_only,
             use_only_deposited_funds,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
         }
     }
 
@@ -268,6 +288,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
         }
     }
 
@@ -547,5 +569,45 @@ impl OrderPacket {
                 ..
             } => *old_price_in_ticks = Some(price_in_ticks),
         }
+    }
+
+    pub fn get_last_valid_slot(&self) -> u64 {
+        match self {
+            Self::PostOnly {
+                last_valid_slot, ..
+            } => last_valid_slot.unwrap_or(0),
+            Self::Limit {
+                last_valid_slot, ..
+            } => last_valid_slot.unwrap_or(0),
+            Self::ImmediateOrCancel { .. } => 0,
+        }
+    }
+
+    pub fn get_last_valid_unix_timestamp_in_seconds(&self) -> u64 {
+        match self {
+            Self::PostOnly {
+                last_valid_unix_timestamp_in_seconds,
+                ..
+            } => last_valid_unix_timestamp_in_seconds.unwrap_or(0),
+            Self::Limit {
+                last_valid_unix_timestamp_in_seconds,
+                ..
+            } => last_valid_unix_timestamp_in_seconds.unwrap_or(0),
+            Self::ImmediateOrCancel { .. } => 0,
+        }
+    }
+
+    pub fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
+        let last_valid_slot = self.get_last_valid_slot();
+        let last_valid_unix_timestamp_in_seconds = self.get_last_valid_unix_timestamp_in_seconds();
+        if last_valid_slot != 0 && current_slot > last_valid_slot {
+            return true;
+        }
+        if last_valid_unix_timestamp_in_seconds != 0
+            && current_unix_timestamp_in_seconds > last_valid_unix_timestamp_in_seconds
+        {
+            return true;
+        }
+        false
     }
 }

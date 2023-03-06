@@ -13,8 +13,8 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use itertools::Itertools;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_compute_units,
-    program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, log::sol_log_compute_units,
+    program_error::ProgramError, pubkey::Pubkey, sysvar::Sysvar,
 };
 use std::mem::size_of;
 
@@ -303,10 +303,17 @@ fn process_new_order<'a, 'info>(
         base_atoms_to_withdraw,
         base_atoms_to_deposit,
     ) = {
+        let clock = Clock::get()?;
+        let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
         let (_order_id, matching_engine_response) = market
-            .place_order(trader.key, *order_packet, record_event_fn)
+            .place_order(
+                trader.key,
+                *order_packet,
+                record_event_fn,
+                &mut get_clock_fn,
+            )
             .ok_or(PhoenixError::NewOrderError)?;
 
         (
@@ -413,6 +420,8 @@ fn process_multiple_new_orders<'a, 'info>(
     };
 
     {
+        let clock = Clock::get()?;
+        let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
         for (book_orders, side) in [(&bids, Side::Bid), (&asks, Side::Ask)].iter() {
@@ -439,7 +448,7 @@ fn process_multiple_new_orders<'a, 'info>(
                 );
                 let matching_engine_response = {
                     let (_order_id, matching_engine_response) = market
-                        .place_order(trader.key, order_packet, record_event_fn)
+                        .place_order(trader.key, order_packet, record_event_fn, &mut get_clock_fn)
                         .ok_or(PhoenixError::NewOrderError)?;
                     matching_engine_response
                 };

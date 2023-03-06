@@ -175,6 +175,7 @@ pub(crate) trait WritableMarket<
         trader: &MarketTraderId,
         order_packet: MarketOrderPacket,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+        get_clock_fn: &mut dyn FnMut() -> (u64, u64),
     ) -> Option<(Option<MarketOrderId>, MatchingEngineResponse)>;
 
     fn cancel_order(

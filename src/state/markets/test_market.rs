@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::quantities::*;
 use crate::state::markets::*;
@@ -31,6 +32,13 @@ fn setup_market_with_params(
     );
     dex.set_fee(fees);
     *dex
+}
+
+fn get_clock_fn() -> (u64, u64) {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    (now.as_millis() as u64, now.as_secs())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -78,6 +86,7 @@ fn layer_orders(
             &trader,
             OrderPacket::new_limit_order_default(side, *p, *s * adj),
             event_recorder,
+            &mut get_clock_fn,
         )
         .unwrap();
     }
@@ -165,6 +174,7 @@ fn test_market_simple() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o.is_none());
@@ -204,6 +214,7 @@ fn test_market_simple() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     println!(
@@ -232,6 +243,7 @@ fn test_market_simple() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
 
@@ -274,6 +286,7 @@ fn test_market_simple() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
 
@@ -379,6 +392,7 @@ fn test_post_only_default() {
             &trader,
             OrderPacket::new_post_only_default(Side::Bid, 100, 1),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     // Cannot place post only order that would match
@@ -387,6 +401,7 @@ fn test_post_only_default() {
             &trader,
             OrderPacket::new_post_only_default(Side::Ask, 100, 1),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -395,6 +410,7 @@ fn test_post_only_default() {
             &trader,
             OrderPacket::new_post_only_default(Side::Ask, 102, 1),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     assert!(market
@@ -402,6 +418,7 @@ fn test_post_only_default() {
             &trader,
             OrderPacket::new_post_only_default(Side::Bid, 101, 1),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -411,6 +428,7 @@ fn test_post_only_default() {
             &trader,
             OrderPacket::new_post_only_default(Side::Bid, 102, 1),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -436,6 +454,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 100, 1, 0, true, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     // Cannot place post only order that would match if reject flag is true
@@ -444,6 +463,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Ask, 100, 1, 0, true, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -452,6 +472,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Ask, 102, 1, 0, true, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     assert!(market
@@ -459,6 +480,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 101, 1, 0, true, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -468,6 +490,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 102, 1, 0, true, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -477,6 +500,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Ask, 100, 1, 0, false, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -486,6 +510,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 102, 1, 0, false, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -505,6 +530,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Ask, 1, 1, 0, false, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -514,6 +540,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 1, 1, 0, false, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -523,6 +550,7 @@ fn test_post_only_rejection() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 0, 1, 0, false, false),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -546,6 +574,7 @@ fn test_cancel_all() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Bid, 100 - i, 1),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -557,6 +586,7 @@ fn test_cancel_all() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Ask, 102 + i, 1),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -580,6 +610,7 @@ fn test_limit_orders_with_self_trade() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 100, 5),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     let ladder = market.get_typed_ladder(1);
@@ -591,6 +622,7 @@ fn test_limit_orders_with_self_trade() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Ask, 100, 10),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     let mut res = MatchingEngineResponse::default();
@@ -613,6 +645,7 @@ fn test_limit_orders_with_self_trade() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
     let (order, matching_engine_response) = market
@@ -628,6 +661,7 @@ fn test_limit_orders_with_self_trade() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -657,6 +691,7 @@ fn test_limit_orders_with_self_trade() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -690,6 +725,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 100, 5),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -698,6 +734,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 95, 15),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -706,6 +743,7 @@ fn test_limit_orders_with_free_lots() {
             &taker,
             OrderPacket::new_limit_order_default(Side::Ask, 95, 15,),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -715,6 +753,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Ask, 100, 5),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -729,6 +768,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Ask, 100, 20),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -744,6 +784,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 100, 10),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -753,6 +794,7 @@ fn test_limit_orders_with_free_lots() {
             &taker,
             OrderPacket::new_limit_order_default(Side::Bid, 101, 10),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     let (order, matching_engine_response) = market
@@ -760,6 +802,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Ask, 100, 50),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -777,6 +820,7 @@ fn test_limit_orders_with_free_lots() {
             &taker,
             OrderPacket::new_limit_order_default(Side::Bid, 105, 55,),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -786,6 +830,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 100, 20),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -807,6 +852,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 100, 50),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -828,6 +874,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 120, 50),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     assert!(market
@@ -835,6 +882,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Ask, 120, 25),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -844,6 +892,7 @@ fn test_limit_orders_with_free_lots() {
             &taker,
             OrderPacket::new_limit_order_default(Side::Ask, 110, 25),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     let (order, matching_engine_response) = market
@@ -851,6 +900,7 @@ fn test_limit_orders_with_free_lots() {
             &trader,
             OrderPacket::new_limit_order_default(Side::Bid, 111, 75),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_some());
@@ -888,6 +938,7 @@ fn test_orders_with_only_free_funds() {
             &taker,
             OrderPacket::new_post_only(Side::Bid, 100, 5, 0, false, true,),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -896,6 +947,7 @@ fn test_orders_with_only_free_funds() {
             &trader,
             OrderPacket::new_post_only(Side::Bid, 100, 5, 0, false, false,),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -913,6 +965,7 @@ fn test_orders_with_only_free_funds() {
                 true,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -929,6 +982,7 @@ fn test_orders_with_only_free_funds() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -946,6 +1000,7 @@ fn test_orders_with_only_free_funds() {
                 true,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -962,6 +1017,7 @@ fn test_orders_with_only_free_funds() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -978,6 +1034,7 @@ fn test_orders_with_only_free_funds() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -995,6 +1052,7 @@ fn test_orders_with_only_free_funds() {
                 true,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 }
@@ -1010,6 +1068,7 @@ fn seed_market_with_orders(
                 trader,
                 OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10),
                 record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
         assert!(market
@@ -1017,6 +1076,7 @@ fn seed_market_with_orders(
                 trader,
                 OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10),
                 record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -1051,6 +1111,7 @@ fn test_fok_and_ioc_limit_1() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_none());
@@ -1076,6 +1137,7 @@ fn test_fok_and_ioc_limit_1() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_none());
@@ -1110,6 +1172,7 @@ fn test_fok_and_ioc_limit_2() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
     assert!(market
@@ -1124,6 +1187,7 @@ fn test_fok_and_ioc_limit_2() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 }
@@ -1158,6 +1222,7 @@ fn test_fok_and_ioc_limit_3() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o.is_none());
@@ -1181,6 +1246,7 @@ fn test_fok_and_ioc_limit_3() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o.is_none());
@@ -1223,6 +1289,7 @@ fn test_fok_and_ioc_limit_4() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o.is_none());
@@ -1252,6 +1319,7 @@ fn test_fok_and_ioc_limit_4() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o.is_none());
@@ -1294,6 +1362,7 @@ fn test_fok_and_ioc_limit_5() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
     assert!(market
@@ -1308,6 +1377,7 @@ fn test_fok_and_ioc_limit_5() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 
@@ -1328,6 +1398,7 @@ fn test_fok_and_ioc_limit_5() {
                     false,
                 ),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_none(),
         "Only one of num_base_lots or num_quote_lots should be set"
@@ -1381,6 +1452,7 @@ fn test_fok_with_slippage_1() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
         assert!(market
@@ -1388,6 +1460,7 @@ fn test_fok_with_slippage_1() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -1424,6 +1497,7 @@ fn test_fok_with_slippage_1() {
                 min_base_lots_out.as_u64(),
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     println!("matching_engine_response: {:?}", matching_engine_response);
@@ -1483,6 +1557,7 @@ fn test_fok_with_slippage_2() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
         assert!(market
@@ -1490,6 +1565,7 @@ fn test_fok_with_slippage_2() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -1507,6 +1583,7 @@ fn test_fok_with_slippage_2() {
                     .as_u64()
             ), // 2 full levels, 1 partial level
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_none());
 }
@@ -1529,6 +1606,7 @@ fn test_fok_with_slippage_3() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Bid, 100 - i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
         assert!(market
@@ -1536,6 +1614,7 @@ fn test_fok_with_slippage_3() {
                 &trader,
                 OrderPacket::new_post_only_default(Side::Ask, 100 + i, 10000 * i),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
     }
@@ -1573,6 +1652,7 @@ fn test_fok_with_slippage_3() {
                 min_quote_lots_out.as_u64(),
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(order.is_none());
@@ -1636,6 +1716,7 @@ fn test_fees_basic() {
             &trader,
             OrderPacket::new_post_only_default(Side::Bid, 9900, 10),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
     assert!(market
@@ -1643,6 +1724,7 @@ fn test_fees_basic() {
             &trader,
             OrderPacket::new_post_only_default(Side::Ask, 10100, 10),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .is_some());
 
@@ -1659,6 +1741,7 @@ fn test_fees_basic() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o_id.is_none());
@@ -1685,6 +1768,7 @@ fn test_fees_basic() {
                 false,
             ),
             &mut record_event_fn,
+            &mut get_clock_fn,
         )
         .unwrap();
     assert!(o_id.is_none());
@@ -1720,6 +1804,7 @@ fn test_evict_order() {
                 &trader,
                 OrderPacket::new_post_only_default(side, price.as_u64(), 1),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             );
         }
         let direction = match side {
@@ -1731,6 +1816,7 @@ fn test_evict_order() {
             &stink_order,
             OrderPacket::new_post_only_default(side, stink_price.as_u64(), 99),
             &mut record_event_fn,
+            &mut get_clock_fn,
         );
         // Order must be more aggressive than the least aggressive order in a full book
         assert!(market
@@ -1738,6 +1824,7 @@ fn test_evict_order() {
                 &stink_order,
                 OrderPacket::new_post_only_default(side, stink_price.as_u64(), 99),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_none());
         let mut event_recorder = VecDeque::new();
@@ -1751,6 +1838,7 @@ fn test_evict_order() {
                     99
                 ),
                 &mut record_event_fn,
+                &mut get_clock_fn,
             )
             .is_some());
 
@@ -1801,7 +1889,12 @@ fn test_reduce_order() {
     {
         let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
         market
-            .place_order(&maker, order_packet, &mut record_event_fn)
+            .place_order(
+                &maker,
+                order_packet,
+                &mut record_event_fn,
+                &mut get_clock_fn,
+            )
             .unwrap();
     }
 
@@ -1857,7 +1950,12 @@ fn test_reduce_order() {
     {
         let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
         market
-            .place_order(&random_maker, order_packet, &mut record_event_fn)
+            .place_order(
+                &random_maker,
+                order_packet,
+                &mut record_event_fn,
+                &mut get_clock_fn,
+            )
             .unwrap();
         assert!(
             market
