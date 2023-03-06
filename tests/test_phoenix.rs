@@ -973,7 +973,7 @@ async fn test_phoenix_admin() {
             .is_ok(),
         "Should be able to claim authority if you are the successor"
     );
-    let params = OrderPacket::new_ioc_by_lots(
+    let params = OrderPacket::new_ioc_by_base_lots(
         Side::Bid,
         sdk.float_price_to_ticks(102.0),
         1,
@@ -1312,7 +1312,7 @@ async fn test_phoenix_basic() {
     .await;
     sdk.set_payer(clone_keypair(&default_taker.user));
 
-    let params = OrderPacket::new_ioc_by_lots(
+    let params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         sdk.float_price_to_ticks(39.7),
         sdk.raw_base_units_to_base_lots(10.0),
@@ -1820,7 +1820,7 @@ async fn test_phoenix_orders_with_free_funds() {
     sdk.set_payer(clone_keypair(&default_taker.user));
 
     //Attempt to use free funds to trade, will reject because the taker has no seat
-    let sell_params = OrderPacket::new_ioc_by_lots(
+    let sell_params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         sdk.float_price_to_ticks(31.0),
         sdk.raw_base_units_to_base_lots(55.0),
@@ -1843,7 +1843,7 @@ async fn test_phoenix_orders_with_free_funds() {
         .is_err());
 
     //Trade through the first 10 levels of the book and self trade the last level on each side
-    let sell_params = OrderPacket::new_ioc_by_lots(
+    let sell_params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         sdk.float_price_to_ticks(31.0),
         sdk.raw_base_units_to_base_lots(55.0),
@@ -1853,7 +1853,7 @@ async fn test_phoenix_orders_with_free_funds() {
         false,
     );
 
-    let buy_params = OrderPacket::new_ioc_by_lots(
+    let buy_params = OrderPacket::new_ioc_by_base_lots(
         Side::Bid,
         sdk.float_price_to_ticks(59.0),
         sdk.raw_base_units_to_base_lots(55.0),
@@ -1863,7 +1863,7 @@ async fn test_phoenix_orders_with_free_funds() {
         false,
     );
 
-    let self_trade_bid_params = OrderPacket::new_ioc_by_lots(
+    let self_trade_bid_params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         sdk.float_price_to_ticks(30.0),
         sdk.raw_base_units_to_base_lots(11.0),
@@ -1873,7 +1873,7 @@ async fn test_phoenix_orders_with_free_funds() {
         false,
     );
 
-    let self_trade_offer_params = OrderPacket::new_ioc_by_lots(
+    let self_trade_offer_params = OrderPacket::new_ioc_by_base_lots(
         Side::Bid,
         sdk.float_price_to_ticks(60.0),
         sdk.raw_base_units_to_base_lots(11.0),
@@ -1953,7 +1953,7 @@ async fn test_phoenix_orders_with_free_funds() {
         sdk.raw_base_units_to_base_lots(10.0),
     );
 
-    let ioc_buy_params = OrderPacket::new_ioc_by_lots(
+    let ioc_buy_params = OrderPacket::new_ioc_by_base_lots(
         Side::Bid,
         sdk.float_price_to_ticks(34.1),
         sdk.raw_base_units_to_base_lots(10.0),
@@ -1963,7 +1963,7 @@ async fn test_phoenix_orders_with_free_funds() {
         true,
     );
 
-    let ioc_sell_params = OrderPacket::new_ioc_by_lots(
+    let ioc_sell_params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         sdk.float_price_to_ticks(30.0),
         sdk.raw_base_units_to_base_lots(10.0),
@@ -2051,7 +2051,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let new_order_ix = create_new_order_with_free_funds_instruction(
         &sdk.core.active_market_key,
         &second_maker.user.pubkey(),
-        &OrderPacket::new_ioc_by_lots(
+        &OrderPacket::new_ioc_by_base_lots(
             Side::Bid,
             sdk.float_price_to_ticks(250.0),
             sdk.raw_base_units_to_base_lots(10.0),
@@ -3060,7 +3060,7 @@ async fn test_phoenix_place_multiple_memory_management() {
                     &default_taker.user.pubkey(),
                     &sdk.base_mint,
                     &sdk.quote_mint,
-                    &OrderPacket::new_ioc_by_lots(
+                    &OrderPacket::new_ioc_by_base_lots(
                         Side::Ask,
                         0,
                         u64::MAX,
@@ -3133,7 +3133,7 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
     // Normally this would crash due to compute usage, but we now coalesce the orders
     // at the same price in place multiple orders
     sdk.set_payer(clone_keypair(&default_taker.user));
-    let order_packet = OrderPacket::new_ioc_by_lots(
+    let order_packet = OrderPacket::new_ioc_by_base_lots(
         Side::Bid,
         sdk.float_price_to_ticks(101.0),
         700,
@@ -3265,7 +3265,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     let second_cross_price = sdk.float_price_to_ticks(*bid_price_range.first().unwrap()); // Takes the last price in the bid price_range (40.0)
     let second_cross_size = sdk.raw_base_units_to_base_lots(1000_f64);
 
-    let params = OrderPacket::new_ioc_by_lots(
+    let params = OrderPacket::new_ioc_by_base_lots(
         Side::Ask,
         second_cross_price,
         first_cross_size + second_cross_size,
