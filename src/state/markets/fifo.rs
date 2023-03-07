@@ -586,9 +586,9 @@ impl<
     }
 
     #[inline]
-    /// Size with fees adjusted
+    /// Quote lot budget with fees adjusted (buys)
     ///
-    /// The desired result is size_in_lots / (1 + fee_bps). We approach this result by taking
+    /// The desired result is adjusted_quote_lots / (1 + fee_bps). We approach this result by taking
     /// (size_in_lots * u64::MAX) / (u64::MAX * (1 + fee_bps)) for accurate numerical precision.
     /// This will never overflow at any point in the calculation because all intermediate values
     /// will be stored in a u128. There is only a single multiplication of u64's which will be
@@ -604,11 +604,23 @@ impl<
             .map(AdjustedQuoteLots::new)
     }
 
+    #[inline]
+    /// Quote lot budget with fees adjusted (sells)
+    ///
+    /// The desired result is adjusted_quote_lots / (1 - fee_bps). We approach this result by taking
+    /// (size_in_lots * u64::MAX) / (u64::MAX * (1 - fee_bps)) for accurate numerical precision.
+    /// This will never overflow at any point in the calculation because all intermediate values
+    /// will be stored in a u128. There is only a single multiplication of u64's which will be
+    /// strictly less than u128::MAX
     fn adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
         &self,
         size_in_adjusted_quote_lots: AdjustedQuoteLots,
-    ) -> AdjustedQuoteLots {
-        size_in_adjusted_quote_lots + self.compute_fee(AdjustedQuoteLots::MAX)
+    ) -> Option<AdjustedQuoteLots> {
+        let fee_adjustment = self.compute_fee(AdjustedQuoteLots::MAX).as_u128() - u64::MAX as u128;
+        // Return an option to catch truncation from downcasting to u64
+        u64::try_from(size_in_adjusted_quote_lots.as_u128() * u64::MAX as u128 / fee_adjustment)
+            .ok()
+            .map(AdjustedQuoteLots::new)
     }
 
     #[inline]
@@ -804,12 +816,14 @@ impl<
             // adjusted quote lots (quote_lots * base_lots_per_base_unit)
             let quote_lot_budget = order_packet.quote_lot_budget();
             let adjusted_quote_lot_budget = match side {
+                // For buys, the adjusted quote lot budget is decreased by the max fee
                 Side::Bid => quote_lot_budget.and_then(|quote_lot_budget| {
                     self.adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
                         quote_lot_budget * self.base_lots_per_base_unit,
                     )
                 }),
-                Side::Ask => quote_lot_budget.map(|quote_lot_budget| {
+                // For sells, the adjusted quote lot budget is increased by the max fee
+                Side::Ask => quote_lot_budget.and_then(|quote_lot_budget| {
                     self.adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
                         quote_lot_budget * self.base_lots_per_base_unit,
                     )
