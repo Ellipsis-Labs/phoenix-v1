@@ -1,8 +1,9 @@
 use crate::{
     program::{
-        dispatch_market::load_with_dispatch_mut, loaders::CancelOrWithdrawContext as Cancel,
-        token_utils::try_withdraw, validation::checkers::phoenix_checkers::MarketAccountInfo,
-        MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
+        assert_with_msg, dispatch_market::load_with_dispatch_mut,
+        loaders::CancelOrWithdrawContext as Cancel, token_utils::try_withdraw,
+        validation::checkers::phoenix_checkers::MarketAccountInfo, MarketHeader, PhoenixError,
+        PhoenixMarketContext, PhoenixVaultContext,
     },
     quantities::{Ticks, WrapperU64},
     state::{
@@ -278,6 +279,19 @@ pub(crate) fn process_cancel_orders<'a, 'info>(
             base_vault,
             num_quote_lots_out * header.get_quote_lot_size(),
             num_base_lots_out * header.get_base_lot_size(),
+        )?;
+    } else {
+        // This case is only reached if the user invoked CancelUpToWithFreeFunds
+        // In this case, there should be no funds to claim
+        assert_with_msg(
+            num_quote_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_quote_lots_out must be 0",
+        )?;
+        assert_with_msg(
+            num_base_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_base_lots_out must be 0",
         )?;
     }
 

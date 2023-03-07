@@ -485,6 +485,12 @@ fn process_multiple_new_orders<'a, 'info>(
                     &quote_vault,
                     trader.as_ref(),
                 )?;
+            } else {
+                assert_with_msg(
+                    quote_lots_to_deposit == QuoteLots::ZERO,
+                    PhoenixError::CancelMultipleOrdersError,
+                    "Expected quote_lots_to_deposit to be zero",
+                )?;
             }
             if !asks.is_empty() {
                 maybe_invoke_deposit(
@@ -493,6 +499,12 @@ fn process_multiple_new_orders<'a, 'info>(
                     &base_account,
                     &base_vault,
                     trader.as_ref(),
+                )?;
+            } else {
+                assert_with_msg(
+                    base_lots_to_deposit == BaseLots::ZERO,
+                    PhoenixError::CancelMultipleOrdersError,
+                    "Expected base_lots_to_deposit to be zero",
                 )?;
             }
         }
