@@ -1143,11 +1143,12 @@ impl<
                 )
             };
 
+            // This block is entered if the order has expired. The order is removed from the book and
+            // the match limit is decremented.
             if (last_valid_slot != 0 && last_valid_slot < current_slot)
                 || (last_valid_unix_timestamp_in_seconds != 0
                     && last_valid_unix_timestamp_in_seconds < current_unix_timestamp)
             {
-                // This block is entered if the order has expired
                 self.reduce_order_inner(
                     trader_index as u32,
                     &order_id,
