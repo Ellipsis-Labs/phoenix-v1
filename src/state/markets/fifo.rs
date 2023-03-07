@@ -156,6 +156,12 @@ impl FIFORestingOrder {
             last_valid_unix_timestamp_in_seconds,
         }
     }
+
+    pub fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
+        (self.last_valid_slot != 0 && self.last_valid_slot < current_slot)
+            || (self.last_valid_unix_timestamp_in_seconds != 0
+                && self.last_valid_unix_timestamp_in_seconds < current_unix_timestamp_in_seconds)
+    }
 }
 
 impl RestingOrder for FIFORestingOrder {
@@ -649,22 +655,45 @@ impl<
     /// This function determines whether a PostOnly order crosses the book.
     /// If the order crosses the book, the function returns the price of the best order
     /// on the opposite side of the book in Ticks. Otherwise, it returns None.
-    fn check_for_cross(&mut self, side: Side, num_ticks: Ticks) -> Option<Ticks> {
-        let book = self.get_book_mut(side.opposite());
-        while let Some((o_id, order)) = book.get_min() {
-            let crosses = match side.opposite() {
-                Side::Bid => o_id.price_in_ticks >= num_ticks,
-                Side::Ask => o_id.price_in_ticks <= num_ticks,
-            };
-            if !crosses {
-                break;
-            } else if order.num_base_lots > BaseLots::ZERO {
-                return Some(o_id.price_in_ticks);
+    fn check_for_cross(
+        &mut self,
+        side: Side,
+        num_ticks: Ticks,
+        current_slot: u64,
+        current_unix_timestamp_in_seconds: u64,
+        record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+    ) -> Option<Ticks> {
+        loop {
+            let book_entry = self.get_book_mut(side.opposite()).get_min();
+            if let Some((o_id, order)) = book_entry {
+                let crosses = match side.opposite() {
+                    Side::Bid => o_id.price_in_ticks >= num_ticks,
+                    Side::Ask => o_id.price_in_ticks <= num_ticks,
+                };
+                if !crosses {
+                    break;
+                } else if order.num_base_lots > BaseLots::ZERO {
+                    if order.is_expired(current_slot, current_unix_timestamp_in_seconds) {
+                        self.reduce_order_inner(
+                            order.trader_index as u32,
+                            &o_id,
+                            side.opposite(),
+                            None,
+                            false,
+                            record_event_fn,
+                        )?;
+                    } else {
+                        return Some(o_id.price_in_ticks);
+                    }
+                } else {
+                    // If the order is empty, we can remove it from the tree
+                    // This case should never occur in v1
+                    phoenix_log!("WARNING: Empty order found in check_for_cross");
+                    self.get_book_mut(side.opposite()).remove(&o_id);
+                }
             } else {
-                // If the order is empty, we can remove it from the tree
-                // This case should never occur in v1
-                phoenix_log!("WARNING: Empty order found in check_for_cross");
-                book.remove(&o_id);
+                // Book is empty
+                break;
             }
         }
         None
@@ -780,7 +809,13 @@ impl<
         } = &mut order_packet
         {
             // Handle cases where PostOnly order would cross the book
-            if let Some(ticks) = self.check_for_cross(side, *price_in_ticks) {
+            if let Some(ticks) = self.check_for_cross(
+                side,
+                *price_in_ticks,
+                current_slot,
+                current_unix_timestamp,
+                record_event_fn,
+            ) {
                 if *reject_post_only {
                     phoenix_log!("PostOnly order crosses the book - order rejected");
                     return None;
