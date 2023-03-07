@@ -38,4 +38,9 @@ pub enum MarketEvent<MarketTraderId: BorshDeserialize + BorshDeserialize> {
     Fee {
         fees_collected_in_quote_lots: QuoteLots,
     },
+    TimeInForce {
+        order_sequence_number: u64,
+        last_valid_slot: u64,
+        last_valid_unix_timestamp_in_seconds: u64,
+    },
 }

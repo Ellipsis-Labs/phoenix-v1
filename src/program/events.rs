@@ -66,6 +66,14 @@ pub struct FeeEvent {
 }
 
 #[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
+pub struct TimeInForceEvent {
+    pub index: u16,
+    pub order_sequence_number: u64,
+    pub last_valid_slot: u64,
+    pub last_valid_unix_timestamp_in_seconds: u64,
+}
+
+#[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
 pub enum PhoenixMarketEvent {
     Uninitialized,
     Header(AuditLogHeader),
@@ -75,6 +83,7 @@ pub enum PhoenixMarketEvent {
     Evict(EvictEvent),
     FillSummary(FillSummaryEvent),
     Fee(FeeEvent),
+    TimeInForce(TimeInForceEvent),
 }
 
 impl Default for PhoenixMarketEvent {
@@ -92,6 +101,7 @@ impl PhoenixMarketEvent {
             Self::FillSummary(FillSummaryEvent { index, .. }) => *index = i,
             Self::Evict(EvictEvent { index, .. }) => *index = i,
             Self::Fee(FeeEvent { index, .. }) => *index = i,
+            Self::TimeInForce(TimeInForceEvent { index, .. }) => *index = i,
             _ => panic!("Cannot set index on uninitialized or header event"),
         }
     }
@@ -166,6 +176,16 @@ impl From<MarketEvent<Pubkey>> for PhoenixMarketEvent {
                 fees_collected_in_quote_lots,
             } => Self::Fee(FeeEvent {
                 fees_collected_in_quote_lots: fees_collected_in_quote_lots.into(),
+                index: 0,
+            }),
+            MarketEvent::TimeInForce {
+                order_sequence_number,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
+            } => Self::TimeInForce(TimeInForceEvent {
+                order_sequence_number,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
                 index: 0,
             }),
         }

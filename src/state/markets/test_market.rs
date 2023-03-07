@@ -2185,13 +2185,16 @@ fn test_tif() {
                 0 => {
                     assert!(matches!(event, MarketEvent::Place { .. }));
                 }
-                1 | 3 => {
+                1 => {
+                    assert!(matches!(event, MarketEvent::TimeInForce { .. }));
+                }
+                2 | 4 => {
                     assert!(matches!(event, MarketEvent::Fill { .. }));
                 }
-                2 | 4 | 6 => {
+                3 | 5 | 7 => {
                     assert!(matches!(event, MarketEvent::FillSummary { .. }));
                 }
-                5 => {
+                6 => {
                     if let MarketEvent::Reduce {
                         order_sequence_number,
                         price_in_ticks,

@@ -1079,6 +1079,18 @@ impl<
                     client_order_id: order_packet.client_order_id(),
                 });
 
+                if resting_order.last_valid_slot != 0
+                    || resting_order.last_valid_unix_timestamp_in_seconds != 0
+                {
+                    // Record the cancel event
+                    record_event_fn(MarketEvent::<MarketTraderId>::TimeInForce {
+                        order_sequence_number: order_id.order_sequence_number,
+                        last_valid_slot: resting_order.last_valid_slot,
+                        last_valid_unix_timestamp_in_seconds: resting_order
+                            .last_valid_unix_timestamp_in_seconds,
+                    });
+                }
+
                 // Increment the order sequence number after successfully placing an order
                 self.order_sequence_number += 1;
             }
