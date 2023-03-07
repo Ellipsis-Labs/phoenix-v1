@@ -653,7 +653,7 @@ impl<
     }
 
     /// This function determines whether a PostOnly order crosses the book.
-    /// If the order crosses the book, the function returns the price of the best order
+    /// If the order crosses the book, the function returns the price of the best unexpired order
     /// on the opposite side of the book in Ticks. Otherwise, it returns None.
     fn check_for_cross(
         &mut self,
@@ -851,13 +851,15 @@ impl<
             // adjusted quote lots (quote_lots * base_lots_per_base_unit)
             let quote_lot_budget = order_packet.quote_lot_budget();
             let adjusted_quote_lot_budget = match side {
-                // For buys, the adjusted quote lot budget is decreased by the max fee
+                // For buys, the adjusted quote lot budget is decreased by the max fee.
+                // This is because the fee is added to the quote lots spent after the matching is complete.
                 Side::Bid => quote_lot_budget.and_then(|quote_lot_budget| {
                     self.adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
                         quote_lot_budget * self.base_lots_per_base_unit,
                     )
                 }),
-                // For sells, the adjusted quote lot budget is increased by the max fee
+                // For sells, the adjusted quote lot budget is increased by the max fee.
+                // This is because the fee is subtracted from the quote lot received after the matching is complete.
                 Side::Ask => quote_lot_budget.and_then(|quote_lot_budget| {
                     self.adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
                         quote_lot_budget * self.base_lots_per_base_unit,
@@ -1316,9 +1318,9 @@ impl<
             // Increment the matched adjusted quote lots for fee calculation
             total_matched_adjusted_quote_lots += matched_adjusted_quote_lots;
 
-            // If the matched base lots is zero, we skip don't record the fill event
+            // If the matched base lots is zero, we don't record the fill event
             if matched_base_lots != BaseLots::ZERO {
-                // The fill event is recorded to be logged later
+                // The fill event is recorded
                 record_event_fn(MarketEvent::<MarketTraderId>::Fill {
                     maker_id: self.get_trader_id_from_index(trader_index as u32),
                     order_sequence_number: order_id.order_sequence_number,
