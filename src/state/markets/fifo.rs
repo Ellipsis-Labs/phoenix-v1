@@ -1269,14 +1269,21 @@ impl<
             // Increment the matched adjusted quote lots for fee calculation
             total_matched_adjusted_quote_lots += matched_adjusted_quote_lots;
 
-            // The fill event is recorded to be logged later
-            record_event_fn(MarketEvent::<MarketTraderId>::Fill {
-                maker_id: self.get_trader_id_from_index(trader_index as u32),
-                order_sequence_number: order_id.order_sequence_number,
-                price_in_ticks: order_id.price_in_ticks,
-                base_lots_filled: matched_base_lots,
-                base_lots_remaining: order_remaining_base_lots,
-            });
+            // If the matched base lots is zero, we skip don't record the fill event
+            if matched_base_lots != BaseLots::ZERO {
+                // The fill event is recorded to be logged later
+                record_event_fn(MarketEvent::<MarketTraderId>::Fill {
+                    maker_id: self.get_trader_id_from_index(trader_index as u32),
+                    order_sequence_number: order_id.order_sequence_number,
+                    price_in_ticks: order_id.price_in_ticks,
+                    base_lots_filled: matched_base_lots,
+                    base_lots_remaining: order_remaining_base_lots,
+                });
+            } else if !inflight_order.should_terminate {
+                phoenix_log!(
+                    "WARNING: should_terminate should always be true if matched_base_lots is zero"
+                );
+            }
 
             let base_lots_per_base_unit = self.base_lots_per_base_unit;
             // Update the maker's state to reflect the match
