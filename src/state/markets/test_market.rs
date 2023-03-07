@@ -35,10 +35,10 @@ fn setup_market_with_params(
 }
 
 fn get_clock_fn() -> (u64, u64) {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    (now.as_millis() as u64, now.as_secs())
+    let now = SystemTime::now();
+    let since_the_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+    let in_ms = since_the_epoch.as_millis();
+    (in_ms as u64, since_the_epoch.as_secs())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2017,4 +2017,189 @@ fn test_reduce_order() {
     }
 
     assert!(market.bids.get(&order_id).is_none());
+}
+
+#[test]
+fn test_tif() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = setup_market();
+    let maker = rng.gen::<u128>();
+
+    pub struct MockClock {
+        slot: u64,
+        timestamp: u64,
+    }
+
+    let now = SystemTime::now();
+    let exp = now
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .checked_add(1000)
+        .unwrap();
+
+    let order_packet_unix_timestamp_tif = OrderPacket::PostOnly {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(1000),
+        num_base_lots: BaseLots::new(100),
+        client_order_id: rng.gen::<u128>(),
+        use_only_deposited_funds: false,
+        reject_post_only: true,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: Some(exp),
+    };
+
+    let order_packet_slot_tif = OrderPacket::PostOnly {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(1000),
+        num_base_lots: BaseLots::new(100),
+        client_order_id: rng.gen::<u128>(),
+        use_only_deposited_funds: false,
+        reject_post_only: true,
+        last_valid_slot: Some(1000),
+        last_valid_unix_timestamp_in_seconds: None,
+    };
+
+    for order_packet in [order_packet_unix_timestamp_tif, order_packet_slot_tif] {
+        let mut mock_clock = MockClock {
+            slot: 0,
+            timestamp: now.duration_since(UNIX_EPOCH).unwrap().as_secs(),
+        };
+        let mut event_recorder = VecDeque::new();
+        let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+        {
+            let mut mock_clock_fn = || (mock_clock.slot, mock_clock.timestamp);
+            market
+                .place_order(
+                    &maker,
+                    order_packet,
+                    &mut record_event_fn,
+                    &mut mock_clock_fn,
+                )
+                .unwrap();
+        }
+
+        let taker = rng.gen::<u128>();
+
+        if order_packet.get_last_valid_slot().is_some() {
+            mock_clock.slot += 500;
+        } else {
+            mock_clock.timestamp += 500;
+        }
+        let (_, matching_engine_response) = {
+            let mut mock_clock_fn = || (mock_clock.slot, mock_clock.timestamp);
+            market
+                .place_order(
+                    &taker,
+                    OrderPacket::new_ioc_by_lots(
+                        Side::Ask,
+                        0,
+                        10,
+                        SelfTradeBehavior::Abort,
+                        None,
+                        rng.gen::<u128>(),
+                        false,
+                    ),
+                    &mut record_event_fn,
+                    &mut mock_clock_fn,
+                )
+                .unwrap()
+        };
+
+        assert!(matching_engine_response.num_quote_lots_out > QuoteLots::ZERO);
+
+        if order_packet.get_last_valid_slot().is_some() {
+            mock_clock.slot += 500;
+        } else {
+            mock_clock.timestamp += 500;
+        }
+
+        let (_, matching_engine_response) = {
+            let mut mock_clock_fn = || (mock_clock.slot, mock_clock.timestamp);
+            market
+                .place_order(
+                    &taker,
+                    OrderPacket::new_ioc_by_lots(
+                        Side::Ask,
+                        0,
+                        10,
+                        SelfTradeBehavior::Abort,
+                        None,
+                        rng.gen::<u128>(),
+                        false,
+                    ),
+                    &mut record_event_fn,
+                    &mut mock_clock_fn,
+                )
+                .unwrap()
+        };
+
+        assert!(matching_engine_response.num_quote_lots_out > QuoteLots::ZERO);
+
+        if order_packet.get_last_valid_slot().is_some() {
+            mock_clock.slot += 1;
+        } else {
+            mock_clock.timestamp += 1;
+        }
+
+        let (_, matching_engine_response) = {
+            let mut mock_clock_fn = || (mock_clock.slot, mock_clock.timestamp);
+            market
+                .place_order(
+                    &taker,
+                    OrderPacket::new_ioc_by_lots(
+                        Side::Ask,
+                        0,
+                        10,
+                        SelfTradeBehavior::Abort,
+                        None,
+                        rng.gen::<u128>(),
+                        false,
+                    ),
+                    &mut record_event_fn,
+                    &mut mock_clock_fn,
+                )
+                .unwrap()
+        };
+
+        // Assert that TIF kicked in
+        assert_eq!(matching_engine_response.num_quote_lots_out, QuoteLots::ZERO);
+
+        for (i, event) in event_recorder.iter().enumerate() {
+            match i {
+                0 => {
+                    assert!(matches!(event, MarketEvent::Place { .. }));
+                }
+                1 | 3 => {
+                    assert!(matches!(event, MarketEvent::Fill { .. }));
+                }
+                2 | 4 | 6 => {
+                    assert!(matches!(event, MarketEvent::FillSummary { .. }));
+                }
+                5 => {
+                    if let MarketEvent::Reduce {
+                        order_sequence_number,
+                        price_in_ticks,
+                        base_lots_removed,
+                        base_lots_remaining,
+                    } = event
+                    {
+                        assert_eq!(
+                            Side::from_order_sequence_number(*order_sequence_number),
+                            Side::Bid
+                        );
+                        assert_eq!(*price_in_ticks, Ticks::new(1000));
+                        assert_eq!(*base_lots_removed, BaseLots::new(80));
+                        assert_eq!(*base_lots_remaining, BaseLots::new(0));
+                    } else {
+                        panic!("Invalid event")
+                    }
+                }
+                _ => {
+                    panic!("Invalid event")
+                }
+            }
+        }
+    }
 }

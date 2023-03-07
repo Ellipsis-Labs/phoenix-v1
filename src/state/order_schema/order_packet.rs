@@ -571,35 +571,36 @@ impl OrderPacket {
         }
     }
 
-    pub fn get_last_valid_slot(&self) -> u64 {
+    pub fn get_last_valid_slot(&self) -> Option<u64> {
         match self {
             Self::PostOnly {
                 last_valid_slot, ..
-            } => last_valid_slot.unwrap_or(0),
+            } => *last_valid_slot,
             Self::Limit {
                 last_valid_slot, ..
-            } => last_valid_slot.unwrap_or(0),
-            Self::ImmediateOrCancel { .. } => 0,
+            } => *last_valid_slot,
+            Self::ImmediateOrCancel { .. } => None,
         }
     }
 
-    pub fn get_last_valid_unix_timestamp_in_seconds(&self) -> u64 {
+    pub fn get_last_valid_unix_timestamp_in_seconds(&self) -> Option<u64> {
         match self {
             Self::PostOnly {
                 last_valid_unix_timestamp_in_seconds,
                 ..
-            } => last_valid_unix_timestamp_in_seconds.unwrap_or(0),
+            } => *last_valid_unix_timestamp_in_seconds,
             Self::Limit {
                 last_valid_unix_timestamp_in_seconds,
                 ..
-            } => last_valid_unix_timestamp_in_seconds.unwrap_or(0),
-            Self::ImmediateOrCancel { .. } => 0,
+            } => *last_valid_unix_timestamp_in_seconds,
+            Self::ImmediateOrCancel { .. } => None,
         }
     }
 
     pub fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
-        let last_valid_slot = self.get_last_valid_slot();
-        let last_valid_unix_timestamp_in_seconds = self.get_last_valid_unix_timestamp_in_seconds();
+        let last_valid_slot = self.get_last_valid_slot().unwrap_or(0);
+        let last_valid_unix_timestamp_in_seconds =
+            self.get_last_valid_unix_timestamp_in_seconds().unwrap_or(0);
         if last_valid_slot != 0 && current_slot > last_valid_slot {
             return true;
         }

@@ -780,8 +780,10 @@ impl<
                 FIFORestingOrder::new(
                     trader_index as u64,
                     order_packet.num_base_lots(),
-                    order_packet.get_last_valid_slot(),
-                    order_packet.get_last_valid_unix_timestamp_in_seconds(),
+                    order_packet.get_last_valid_slot().unwrap_or(0),
+                    order_packet
+                        .get_last_valid_unix_timestamp_in_seconds()
+                        .unwrap_or(0),
                 ),
                 MatchingEngineResponse::default(),
             )
@@ -806,8 +808,10 @@ impl<
                 order_packet.match_limit(),
                 base_lot_budget,
                 adjusted_quote_lot_budget,
-                order_packet.get_last_valid_slot(),
-                order_packet.get_last_valid_unix_timestamp_in_seconds(),
+                order_packet.get_last_valid_slot().unwrap_or(0),
+                order_packet
+                    .get_last_valid_unix_timestamp_in_seconds()
+                    .unwrap_or(0),
             );
             let resting_order = self
                 .match_order(

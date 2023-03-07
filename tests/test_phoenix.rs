@@ -3,6 +3,7 @@ use ellipsis_client::EllipsisClient;
 use phoenix::phoenix_log_authority;
 use phoenix::program::deposit::DepositParams;
 use phoenix::program::instruction_builders::*;
+use phoenix::program::new_order::CondensedOrder;
 use phoenix::program::new_order::MultipleOrderPacket;
 use phoenix::program::MarketHeader;
 use phoenix::quantities::WrapperU64;
@@ -2280,24 +2281,32 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Place multiple post only orders successfully
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(8.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(9.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
         vec![
-            (
-                sdk.float_price_to_ticks(10.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(10.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(11.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
     );
 
@@ -2332,25 +2341,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Ensure free funds order doesnt place if not enough base lots but enough quote lots
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                sdk.raw_base_units_to_base_lots(9.0),
             ),
-            (
-                sdk.float_price_to_ticks(9.0),
+            CondensedOrder::new_default(
+                sdk.float_price_to_ticks(11.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(10.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(11.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(12.0),
                 sdk.raw_base_units_to_base_lots(4.0),
             ),
@@ -2373,28 +2382,38 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(3.0),
-                sdk.raw_base_units_to_base_lots(1.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(8.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(9.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(3.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(1.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
         vec![
-            (
-                sdk.float_price_to_ticks(10.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(10.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(11.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
     );
 
@@ -2413,28 +2432,38 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // place multiple post only orders successfully with free funds
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(8.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(9.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
         vec![
-            (
-                sdk.float_price_to_ticks(17.0),
-                sdk.raw_base_units_to_base_lots(10.0),
-            ),
-            (
-                sdk.float_price_to_ticks(17.0),
-                sdk.raw_base_units_to_base_lots(5.0),
-            ),
-            (
-                sdk.float_price_to_ticks(12.0),
-                sdk.raw_base_units_to_base_lots(5.0),
-            ),
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(17.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(17.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(5.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            CondensedOrder {
+                price_in_ticks: sdk.float_price_to_ticks(12.0),
+                size_in_base_lots: sdk.raw_base_units_to_base_lots(5.0),
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
         ],
     );
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
@@ -2474,21 +2503,21 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Ensure we can't place orders in cross against themselves
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(8.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(9.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(9.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(11.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
@@ -2512,25 +2541,25 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Ensure we can't place orders in cross against themselves, different variation
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(29.0),
                 sdk.raw_base_units_to_base_lots(1.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(9.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(19.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(30.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(25.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
@@ -2589,21 +2618,21 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Ensure we can't place orders in cross against the existing book
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(8.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(9.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(10.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(11.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
@@ -2626,11 +2655,11 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(20.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(9.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
@@ -2656,46 +2685,46 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Currently have 20 base units and 170 quote units available
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(5.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(4.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(3.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(5.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
-            (
+            CondensedOrder::new_default(
                 //this order is all of the extra quote lots we need to deposit
                 sdk.float_price_to_ticks(4.0),
                 sdk.raw_base_units_to_base_lots(10.0),
             ),
         ],
         vec![
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0),
                 sdk.raw_base_units_to_base_lots(5.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(105.0),
                 sdk.raw_base_units_to_base_lots(5.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0),
                 sdk.raw_base_units_to_base_lots(5.0),
             ),
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(103.0),
                 sdk.raw_base_units_to_base_lots(5.0),
             ),
-            (
+            CondensedOrder::new_default(
                 //this order is all of the extra base lots we need to deposit
                 sdk.float_price_to_ticks(102.0),
                 sdk.raw_base_units_to_base_lots(5.0),
@@ -2751,7 +2780,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Send 100 orders on each side to verify there is enough compute to do so
     let bids = (1..101)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -2759,7 +2788,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
     let asks = (1..101)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -2790,7 +2819,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     //Send multiple orders in cross via the second maker - verify this throws an error
     let bids = (1..30)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -2798,7 +2827,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
     let asks = (1..30)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -2822,7 +2851,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Send multiple orders in cross via the second maker, this time with post only rejection set to false - verify this succeeds
     let bids = (1..30)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -2830,7 +2859,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
     let asks = (1..30)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(10.0),
             )
@@ -3015,7 +3044,7 @@ async fn test_phoenix_place_multiple_memory_management() {
     // Send 40 orders on each side to verify there is enough compute to do so
     let bids = (1..41)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(1.0),
             )
@@ -3023,7 +3052,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         .collect::<Vec<_>>();
     let asks = (1..41)
         .map(|i| {
-            (
+            CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
                 sdk.raw_base_units_to_base_lots(1.0),
             )
@@ -3098,10 +3127,10 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
     // Stuff the book with 1 lots
     loop {
         let bids = (start..start + 30)
-            .map(|_| (sdk.float_price_to_ticks(99.0), 1))
+            .map(|_| CondensedOrder::new_default(sdk.float_price_to_ticks(99.0), 1))
             .collect::<Vec<_>>();
         let asks = (start..start + 30)
-            .map(|_| (sdk.float_price_to_ticks(100.0), 1))
+            .map(|_| CondensedOrder::new_default(sdk.float_price_to_ticks(100.0), 1))
             .collect::<Vec<_>>();
 
         let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
