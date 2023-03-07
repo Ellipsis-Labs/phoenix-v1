@@ -593,9 +593,22 @@ impl<
     /// This will never overflow at any point in the calculation because all intermediate values
     /// will be stored in a u128. There is only a single multiplication of u64's which will be
     /// strictly less than u128::MAX
-    fn size_post_fee_adjustment(&self, size_in_adjusted_quote_lots: AdjustedQuoteLots) -> u64 {
+    fn adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
+        &self,
+        size_in_adjusted_quote_lots: AdjustedQuoteLots,
+    ) -> Option<AdjustedQuoteLots> {
         let fee_adjustment = self.compute_fee(AdjustedQuoteLots::MAX).as_u128() + u64::MAX as u128;
-        (size_in_adjusted_quote_lots.as_u128() * u64::MAX as u128 / fee_adjustment) as u64
+        // Return an option to catch truncation from downcasting to u64
+        u64::try_from(size_in_adjusted_quote_lots.as_u128() * u64::MAX as u128 / fee_adjustment)
+            .ok()
+            .map(AdjustedQuoteLots::new)
+    }
+
+    fn adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
+        &self,
+        size_in_adjusted_quote_lots: AdjustedQuoteLots,
+    ) -> AdjustedQuoteLots {
+        size_in_adjusted_quote_lots + self.compute_fee(AdjustedQuoteLots::MAX)
     }
 
     #[inline]
@@ -791,16 +804,21 @@ impl<
             let base_lot_budget = order_packet.base_lot_budget();
             // Multiply the quote lot budget by the number of base lots per unit to get the number of
             // adjusted quote lots (quote_lots * base_lots_per_base_unit)
-            let adjusted_quote_lot_budget = AdjustedQuoteLots::new(
-                order_packet
-                    .quote_lot_budget()
-                    .map(|quote_lot_budget| {
-                        self.size_post_fee_adjustment(
-                            quote_lot_budget * self.base_lots_per_base_unit,
-                        )
-                    })
-                    .unwrap_or(u64::MAX),
-            );
+            let quote_lot_budget = order_packet.quote_lot_budget();
+            let adjusted_quote_lot_budget = match side {
+                Side::Bid => quote_lot_budget.and_then(|quote_lot_budget| {
+                    self.adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
+                        quote_lot_budget * self.base_lots_per_base_unit,
+                    )
+                }),
+                Side::Ask => quote_lot_budget.map(|quote_lot_budget| {
+                    self.adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
+                        quote_lot_budget * self.base_lots_per_base_unit,
+                    )
+                }),
+            }
+            .unwrap_or(AdjustedQuoteLots::new(u64::MAX));
+
             let mut inflight_order = InflightOrder::new(
                 side,
                 order_packet.self_trade_behavior(),
