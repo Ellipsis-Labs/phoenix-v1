@@ -1082,7 +1082,7 @@ impl<
                 if resting_order.last_valid_slot != 0
                     || resting_order.last_valid_unix_timestamp_in_seconds != 0
                 {
-                    // Record the cancel event
+                    // Record the time in force event
                     record_event_fn(MarketEvent::<MarketTraderId>::TimeInForce {
                         order_sequence_number: order_id.order_sequence_number,
                         last_valid_slot: resting_order.last_valid_slot,
