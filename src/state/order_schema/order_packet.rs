@@ -598,16 +598,17 @@ impl OrderPacket {
     }
 
     pub fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
-        let last_valid_slot = self.get_last_valid_slot().unwrap_or(0);
-        let last_valid_unix_timestamp_in_seconds =
-            self.get_last_valid_unix_timestamp_in_seconds().unwrap_or(0);
-        if last_valid_slot != 0 && current_slot > last_valid_slot {
-            return true;
+        if let Some(last_valid_slot) = self.get_last_valid_slot() {
+            if current_slot > last_valid_slot {
+                return true;
+            }
         }
-        if last_valid_unix_timestamp_in_seconds != 0
-            && current_unix_timestamp_in_seconds > last_valid_unix_timestamp_in_seconds
+        if let Some(last_valid_unix_timestamp_in_seconds) =
+            self.get_last_valid_unix_timestamp_in_seconds()
         {
-            return true;
+            if current_unix_timestamp_in_seconds > last_valid_unix_timestamp_in_seconds {
+                return true;
+            }
         }
         false
     }

@@ -34,11 +34,9 @@ fn setup_market_with_params(
     *dex
 }
 
+/// Dummy placeholder clock function
 fn get_clock_fn() -> (u64, u64) {
-    let now = SystemTime::now();
-    let since_the_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
-    let in_ms = since_the_epoch.as_millis();
-    (in_ms as u64, since_the_epoch.as_secs())
+    (0, 0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2056,17 +2054,33 @@ fn test_tif() {
         client_order_id: rng.gen::<u128>(),
         use_only_deposited_funds: false,
         reject_post_only: true,
-        last_valid_slot: Some(1000),
+        last_valid_slot: Some(2000),
         last_valid_unix_timestamp_in_seconds: None,
     };
 
     for order_packet in [order_packet_unix_timestamp_tif, order_packet_slot_tif] {
         let mut mock_clock = MockClock {
-            slot: 0,
+            slot: 1000,
             timestamp: now.duration_since(UNIX_EPOCH).unwrap().as_secs(),
         };
         let mut event_recorder = VecDeque::new();
         let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+        {
+            let expired_mock_clock = MockClock {
+                slot: 3000,
+                timestamp: now.duration_since(UNIX_EPOCH).unwrap().as_secs() + 2000,
+            };
+            let mut mock_clock_fn = || (expired_mock_clock.slot, expired_mock_clock.timestamp);
+            assert!(market
+                .place_order(
+                    &maker,
+                    order_packet,
+                    &mut record_event_fn,
+                    &mut mock_clock_fn,
+                )
+                .is_none());
+        }
 
         {
             let mut mock_clock_fn = || (mock_clock.slot, mock_clock.timestamp);

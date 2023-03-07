@@ -33,9 +33,9 @@ pub(crate) struct InflightOrder {
     /// Number of quote lots paid in fees
     pub quote_lot_fees: QuoteLots,
 
-    pub last_valid_slot: u64,
+    pub last_valid_slot: Option<u64>,
 
-    pub last_valid_unix_timestamp_in_seconds: u64,
+    pub last_valid_unix_timestamp_in_seconds: Option<u64>,
 }
 
 impl InflightOrder {
@@ -46,8 +46,8 @@ impl InflightOrder {
         match_limit: u64,
         base_lot_budget: BaseLots,
         adjusted_quote_lot_budget: AdjustedQuoteLots,
-        last_valid_slot: u64,
-        last_valid_unix_timestamp_in_seconds: u64,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     ) -> Self {
         InflightOrder {
             side,

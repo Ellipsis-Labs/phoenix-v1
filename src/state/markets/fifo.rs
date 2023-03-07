@@ -120,14 +120,14 @@ impl FIFORestingOrder {
     pub fn new(
         trader_index: u64,
         num_base_lots: BaseLots,
-        last_valid_slot: u64,
-        last_valid_unix_timestamp_in_seconds: u64,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     ) -> Self {
         FIFORestingOrder {
             trader_index,
             num_base_lots,
-            last_valid_slot,
-            last_valid_unix_timestamp_in_seconds,
+            last_valid_slot: last_valid_slot.unwrap_or(0),
+            last_valid_unix_timestamp_in_seconds: last_valid_unix_timestamp_in_seconds.unwrap_or(0),
         }
     }
 
@@ -757,7 +757,7 @@ impl<
         let (current_slot, current_unix_timestamp) = get_clock_fn();
 
         if order_packet.is_expired(current_slot, current_unix_timestamp) {
-            phoenix_log!("Order parameters are expired, skipping matching and posting");
+            phoenix_log!("Order parameters include a last_valid_slot or last_valid_unix_timestamp_in_seconds in the past, skipping matching and posting");
             return None;
         }
 
@@ -793,10 +793,8 @@ impl<
                 FIFORestingOrder::new(
                     trader_index as u64,
                     order_packet.num_base_lots(),
-                    order_packet.get_last_valid_slot().unwrap_or(0),
-                    order_packet
-                        .get_last_valid_unix_timestamp_in_seconds()
-                        .unwrap_or(0),
+                    order_packet.get_last_valid_slot(),
+                    order_packet.get_last_valid_unix_timestamp_in_seconds(),
                 ),
                 MatchingEngineResponse::default(),
             )
@@ -826,10 +824,8 @@ impl<
                 order_packet.match_limit(),
                 base_lot_budget,
                 adjusted_quote_lot_budget,
-                order_packet.get_last_valid_slot().unwrap_or(0),
-                order_packet
-                    .get_last_valid_unix_timestamp_in_seconds()
-                    .unwrap_or(0),
+                order_packet.get_last_valid_slot(),
+                order_packet.get_last_valid_unix_timestamp_in_seconds(),
             );
             let resting_order = self
                 .match_order(
@@ -1099,8 +1095,8 @@ impl<
                 trader_index,
                 order_id,
                 num_base_lots_quoted,
-                slot_expiration,
-                unix_timestamp_expiration,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
             ) = {
                 let book = self.get_book_mut(inflight_order.side.opposite());
                 // Look at the top of the book to compare the book's price to the order's price
@@ -1110,8 +1106,8 @@ impl<
                     FIFORestingOrder {
                         trader_index,
                         num_base_lots: num_base_lots_quoted,
-                        last_valid_slot: slot_expiration,
-                        last_valid_unix_timestamp_in_seconds: unix_timestamp_expiration,
+                        last_valid_slot,
+                        last_valid_unix_timestamp_in_seconds,
                     },
                 ) = if let Some((o_id, quote)) = book.get_min() {
                     (
@@ -1142,14 +1138,14 @@ impl<
                     trader_index,
                     order_id,
                     num_base_lots_quoted,
-                    slot_expiration,
-                    unix_timestamp_expiration,
+                    last_valid_slot,
+                    last_valid_unix_timestamp_in_seconds,
                 )
             };
 
-            if (slot_expiration != 0 && slot_expiration < current_slot)
-                || (unix_timestamp_expiration != 0
-                    && unix_timestamp_expiration < current_unix_timestamp)
+            if (last_valid_slot != 0 && last_valid_slot < current_slot)
+                || (last_valid_unix_timestamp_in_seconds != 0
+                    && last_valid_unix_timestamp_in_seconds < current_unix_timestamp)
             {
                 // This block is entered if the order has expired
                 self.reduce_order_inner(
