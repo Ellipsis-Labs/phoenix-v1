@@ -66,6 +66,23 @@ pub struct FeeEvent {
 }
 
 #[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
+pub struct TimeInForceEvent {
+    pub index: u16,
+    pub order_sequence_number: u64,
+    pub last_valid_slot: u64,
+    pub last_valid_unix_timestamp_in_seconds: u64,
+}
+
+#[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
+pub struct ExpiredOrderEvent {
+    pub index: u16,
+    pub maker_id: Pubkey,
+    pub order_sequence_number: u64,
+    pub price_in_ticks: u64,
+    pub base_lots_removed: u64,
+}
+
+#[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
 pub enum PhoenixMarketEvent {
     Uninitialized,
     Header(AuditLogHeader),
@@ -75,6 +92,8 @@ pub enum PhoenixMarketEvent {
     Evict(EvictEvent),
     FillSummary(FillSummaryEvent),
     Fee(FeeEvent),
+    TimeInForce(TimeInForceEvent),
+    ExpiredOrder(ExpiredOrderEvent),
 }
 
 impl Default for PhoenixMarketEvent {
@@ -92,6 +111,8 @@ impl PhoenixMarketEvent {
             Self::FillSummary(FillSummaryEvent { index, .. }) => *index = i,
             Self::Evict(EvictEvent { index, .. }) => *index = i,
             Self::Fee(FeeEvent { index, .. }) => *index = i,
+            Self::TimeInForce(TimeInForceEvent { index, .. }) => *index = i,
+            Self::ExpiredOrder(ExpiredOrderEvent { index, .. }) => *index = i,
             _ => panic!("Cannot set index on uninitialized or header event"),
         }
     }
@@ -166,6 +187,28 @@ impl From<MarketEvent<Pubkey>> for PhoenixMarketEvent {
                 fees_collected_in_quote_lots,
             } => Self::Fee(FeeEvent {
                 fees_collected_in_quote_lots: fees_collected_in_quote_lots.into(),
+                index: 0,
+            }),
+            MarketEvent::<Pubkey>::TimeInForce {
+                order_sequence_number,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
+            } => Self::TimeInForce(TimeInForceEvent {
+                order_sequence_number,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
+                index: 0,
+            }),
+            MarketEvent::<Pubkey>::ExpiredOrder {
+                maker_id,
+                order_sequence_number,
+                price_in_ticks,
+                base_lots_removed,
+            } => Self::ExpiredOrder(ExpiredOrderEvent {
+                maker_id,
+                order_sequence_number,
+                price_in_ticks: price_in_ticks.into(),
+                base_lots_removed: base_lots_removed.into(),
                 index: 0,
             }),
         }

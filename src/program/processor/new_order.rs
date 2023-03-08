@@ -7,14 +7,14 @@ use crate::{
         token_utils::{maybe_invoke_deposit, maybe_invoke_withdraw},
         MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
-    quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, WrapperU64},
+    quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, Ticks, WrapperU64},
     state::{markets::MarketEvent, OrderPacket, OrderPacketMetadata, Side},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use itertools::Itertools;
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, log::sol_log_compute_units,
-    program_error::ProgramError, pubkey::Pubkey,
+    account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, log::sol_log_compute_units,
+    program_error::ProgramError, pubkey::Pubkey, sysvar::Sysvar,
 };
 use std::mem::size_of;
 
@@ -32,51 +32,40 @@ pub struct MultipleOrderPacket {
 pub struct CondensedOrder {
     pub price_in_ticks: u64,
     pub size_in_base_lots: u64,
+    pub last_valid_slot: Option<u64>,
+    pub last_valid_unix_timestamp_in_seconds: Option<u64>,
+}
+
+impl CondensedOrder {
+    pub fn new_default(price_in_ticks: u64, size_in_base_lots: u64) -> Self {
+        CondensedOrder {
+            price_in_ticks,
+            size_in_base_lots,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        }
+    }
 }
 
 impl MultipleOrderPacket {
     pub fn new(
-        bids: Vec<(u64, u64)>,
-        asks: Vec<(u64, u64)>,
+        bids: Vec<CondensedOrder>,
+        asks: Vec<CondensedOrder>,
         client_order_id: Option<u128>,
         reject_post_only: bool,
     ) -> Self {
         MultipleOrderPacket {
-            bids: bids
-                .iter()
-                .map(|(p, s)| CondensedOrder {
-                    price_in_ticks: *p,
-                    size_in_base_lots: *s,
-                })
-                .collect(),
-            asks: asks
-                .iter()
-                .map(|(p, s)| CondensedOrder {
-                    price_in_ticks: *p,
-                    size_in_base_lots: *s,
-                })
-                .collect(),
+            bids,
+            asks,
             client_order_id,
             reject_post_only,
         }
     }
 
-    pub fn new_default(bids: Vec<(u64, u64)>, asks: Vec<(u64, u64)>) -> Self {
+    pub fn new_default(bids: Vec<CondensedOrder>, asks: Vec<CondensedOrder>) -> Self {
         MultipleOrderPacket {
-            bids: bids
-                .iter()
-                .map(|(p, s)| CondensedOrder {
-                    price_in_ticks: *p,
-                    size_in_base_lots: *s,
-                })
-                .collect(),
-            asks: asks
-                .iter()
-                .map(|(p, s)| CondensedOrder {
-                    price_in_ticks: *p,
-                    size_in_base_lots: *s,
-                })
-                .collect(),
+            bids,
+            asks,
             client_order_id: None,
             reject_post_only: true,
         }
@@ -303,10 +292,17 @@ fn process_new_order<'a, 'info>(
         base_atoms_to_withdraw,
         base_atoms_to_deposit,
     ) = {
+        let clock = Clock::get()?;
+        let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
         let (_order_id, matching_engine_response) = market
-            .place_order(trader.key, *order_packet, record_event_fn)
+            .place_order(
+                trader.key,
+                *order_packet,
+                record_event_fn,
+                &mut get_clock_fn,
+            )
             .ok_or(PhoenixError::NewOrderError)?;
 
         (
@@ -413,33 +409,53 @@ fn process_multiple_new_orders<'a, 'info>(
     };
 
     {
+        let clock = Clock::get()?;
+        let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
         for (book_orders, side) in [(&bids, Side::Bid), (&asks, Side::Ask)].iter() {
             for CondensedOrder {
                 price_in_ticks,
                 size_in_base_lots,
+                last_valid_slot,
+                last_valid_unix_timestamp_in_seconds,
             } in book_orders
                 .iter()
                 .sorted_by(|o1, o2| o1.price_in_ticks.cmp(&o2.price_in_ticks))
-                .group_by(|o| o.price_in_ticks)
-                .into_iter()
-                .map(|(price_in_ticks, level)| CondensedOrder {
-                    price_in_ticks,
-                    size_in_base_lots: level.fold(0, |acc, o| acc + o.size_in_base_lots),
+                .group_by(|o| {
+                    (
+                        o.price_in_ticks,
+                        o.last_valid_slot,
+                        o.last_valid_unix_timestamp_in_seconds,
+                    )
                 })
+                .into_iter()
+                .map(
+                    |(
+                        (price_in_ticks, last_valid_slot, last_valid_unix_timestamp_in_seconds),
+                        level,
+                    )| CondensedOrder {
+                        price_in_ticks,
+                        size_in_base_lots: level.fold(0, |acc, o| acc + o.size_in_base_lots),
+                        last_valid_slot,
+                        last_valid_unix_timestamp_in_seconds,
+                    },
+                )
             {
-                let order_packet = OrderPacket::new_post_only(
-                    *side,
-                    price_in_ticks,
-                    size_in_base_lots,
+                let order_packet = OrderPacket::PostOnly {
+                    side: *side,
+                    price_in_ticks: Ticks::new(price_in_ticks),
+                    num_base_lots: BaseLots::new(size_in_base_lots),
                     client_order_id,
                     reject_post_only,
-                    no_deposit,
-                );
+                    use_only_deposited_funds: no_deposit,
+                    last_valid_slot,
+                    last_valid_unix_timestamp_in_seconds,
+                };
+
                 let matching_engine_response = {
                     let (_order_id, matching_engine_response) = market
-                        .place_order(trader.key, order_packet, record_event_fn)
+                        .place_order(trader.key, order_packet, record_event_fn, &mut get_clock_fn)
                         .ok_or(PhoenixError::NewOrderError)?;
                     matching_engine_response
                 };
@@ -469,6 +485,12 @@ fn process_multiple_new_orders<'a, 'info>(
                     &quote_vault,
                     trader.as_ref(),
                 )?;
+            } else {
+                assert_with_msg(
+                    quote_lots_to_deposit == QuoteLots::ZERO,
+                    PhoenixError::CancelMultipleOrdersError,
+                    "Expected quote_lots_to_deposit to be zero",
+                )?;
             }
             if !asks.is_empty() {
                 maybe_invoke_deposit(
@@ -477,6 +499,12 @@ fn process_multiple_new_orders<'a, 'info>(
                     &base_account,
                     &base_vault,
                     trader.as_ref(),
+                )?;
+            } else {
+                assert_with_msg(
+                    base_lots_to_deposit == BaseLots::ZERO,
+                    PhoenixError::CancelMultipleOrdersError,
+                    "Expected base_lots_to_deposit to be zero",
                 )?;
             }
         }

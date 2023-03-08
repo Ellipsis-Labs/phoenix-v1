@@ -1801,6 +1801,58 @@
       }
     },
     {
+      "name": "TimeInForceEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u16"
+          },
+          {
+            "name": "orderSequenceNumber",
+            "type": "u64"
+          },
+          {
+            "name": "lastValidSlot",
+            "type": "u64"
+          },
+          {
+            "name": "lastValidUnixTimestampInSeconds",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExpiredOrderEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u16"
+          },
+          {
+            "name": "makerId",
+            "type": "publicKey"
+          },
+          {
+            "name": "orderSequenceNumber",
+            "type": "u64"
+          },
+          {
+            "name": "priceInTicks",
+            "type": "u64"
+          },
+          {
+            "name": "baseLotsRemoved",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "CancelUpToParams",
       "type": {
         "kind": "struct",
@@ -1950,6 +2002,18 @@
           {
             "name": "sizeInBaseLots",
             "type": "u64"
+          },
+          {
+            "name": "lastValidSlot",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "lastValidUnixTimestampInSeconds",
+            "type": {
+              "option": "u64"
+            }
           }
         ]
       }
@@ -2154,6 +2218,22 @@
             "fields": [
               {
                 "defined": "FeeEvent"
+              }
+            ]
+          },
+          {
+            "name": "TimeInForce",
+            "fields": [
+              {
+                "defined": "TimeInForceEvent"
+              }
+            ]
+          },
+          {
+            "name": "ExpiredOrder",
+            "fields": [
+              {
+                "defined": "ExpiredOrderEvent"
               }
             ]
           }
