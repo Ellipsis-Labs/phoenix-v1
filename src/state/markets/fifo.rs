@@ -440,6 +440,7 @@ impl<
             order_id,
             side,
             size,
+            false,
             claim_funds,
             record_event_fn,
         )
@@ -679,6 +680,7 @@ impl<
                             &o_id,
                             side.opposite(),
                             None,
+                            true,
                             false,
                             record_event_fn,
                         )?;
@@ -1217,6 +1219,7 @@ impl<
                     &order_id,
                     inflight_order.side.opposite(),
                     None,
+                    true,
                     false,
                     record_event_fn,
                 )?;
@@ -1239,6 +1242,7 @@ impl<
                             &order_id,
                             inflight_order.side.opposite(),
                             None,
+                            false,
                             false,
                             record_event_fn,
                         )?;
@@ -1443,6 +1447,7 @@ impl<
                     &order_id,
                     Side::from_order_sequence_number(order_id.order_sequence_number),
                     None,
+                    false,
                     claim_funds,
                     record_event_fn,
                 )
@@ -1477,9 +1482,11 @@ impl<
         order_id: &FIFOOrderId,
         side: Side,
         size: Option<BaseLots>,
+        force_cancelled_or_expired: bool,
         claim_funds: bool,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
     ) -> Option<MatchingEngineResponse> {
+        let maker_id = self.get_trader_id_from_index(trader_index);
         let removed_base_lots = {
             let book = self.get_book_mut(side);
             let (should_remove_order_from_book, base_lots_to_remove) = {
@@ -1508,12 +1515,22 @@ impl<
                 resting_order.num_base_lots -= base_lots_to_remove;
                 resting_order.num_base_lots
             };
-            record_event_fn(MarketEvent::Reduce {
-                order_sequence_number: order_id.order_sequence_number,
-                price_in_ticks: order_id.price_in_ticks,
-                base_lots_removed: base_lots_to_remove,
-                base_lots_remaining,
-            });
+            // If the order was not cancelled by the maker, we make sure that the maker's id is logged.
+            if force_cancelled_or_expired {
+                record_event_fn(MarketEvent::ExpiredOrder {
+                    maker_id,
+                    order_sequence_number: order_id.order_sequence_number,
+                    price_in_ticks: order_id.price_in_ticks,
+                    base_lots_removed: base_lots_to_remove,
+                });
+            } else {
+                record_event_fn(MarketEvent::Reduce {
+                    order_sequence_number: order_id.order_sequence_number,
+                    price_in_ticks: order_id.price_in_ticks,
+                    base_lots_removed: base_lots_to_remove,
+                    base_lots_remaining,
+                });
+            }
             base_lots_to_remove
         };
         let (num_quote_lots, num_base_lots) = {

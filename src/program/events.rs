@@ -74,6 +74,15 @@ pub struct TimeInForceEvent {
 }
 
 #[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
+pub struct ExpiredOrder {
+    pub index: u16,
+    pub maker_id: Pubkey,
+    pub order_sequence_number: u64,
+    pub price_in_ticks: u64,
+    pub base_lots_removed: u64,
+}
+
+#[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
 pub enum PhoenixMarketEvent {
     Uninitialized,
     Header(AuditLogHeader),
@@ -84,6 +93,7 @@ pub enum PhoenixMarketEvent {
     FillSummary(FillSummaryEvent),
     Fee(FeeEvent),
     TimeInForce(TimeInForceEvent),
+    ExpiredOrder(ExpiredOrder),
 }
 
 impl Default for PhoenixMarketEvent {
@@ -102,6 +112,7 @@ impl PhoenixMarketEvent {
             Self::Evict(EvictEvent { index, .. }) => *index = i,
             Self::Fee(FeeEvent { index, .. }) => *index = i,
             Self::TimeInForce(TimeInForceEvent { index, .. }) => *index = i,
+            Self::ExpiredOrder(ExpiredOrder { index, .. }) => *index = i,
             _ => panic!("Cannot set index on uninitialized or header event"),
         }
     }
@@ -178,7 +189,7 @@ impl From<MarketEvent<Pubkey>> for PhoenixMarketEvent {
                 fees_collected_in_quote_lots: fees_collected_in_quote_lots.into(),
                 index: 0,
             }),
-            MarketEvent::TimeInForce {
+            MarketEvent::<Pubkey>::TimeInForce {
                 order_sequence_number,
                 last_valid_slot,
                 last_valid_unix_timestamp_in_seconds,
@@ -186,6 +197,18 @@ impl From<MarketEvent<Pubkey>> for PhoenixMarketEvent {
                 order_sequence_number,
                 last_valid_slot,
                 last_valid_unix_timestamp_in_seconds,
+                index: 0,
+            }),
+            MarketEvent::<Pubkey>::ExpiredOrder {
+                maker_id,
+                order_sequence_number,
+                price_in_ticks,
+                base_lots_removed,
+            } => Self::ExpiredOrder(ExpiredOrder {
+                maker_id,
+                order_sequence_number,
+                price_in_ticks: price_in_ticks.into(),
+                base_lots_removed: base_lots_removed.into(),
                 index: 0,
             }),
         }

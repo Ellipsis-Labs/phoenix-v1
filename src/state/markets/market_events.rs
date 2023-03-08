@@ -43,4 +43,10 @@ pub enum MarketEvent<MarketTraderId: BorshDeserialize + BorshDeserialize> {
         last_valid_slot: u64,
         last_valid_unix_timestamp_in_seconds: u64,
     },
+    ExpiredOrder {
+        maker_id: MarketTraderId,
+        order_sequence_number: u64,
+        price_in_ticks: Ticks,
+        base_lots_removed: BaseLots,
+    },
 }

@@ -2195,20 +2195,20 @@ fn test_tif() {
                     assert!(matches!(event, MarketEvent::FillSummary { .. }));
                 }
                 6 => {
-                    if let MarketEvent::Reduce {
+                    if let MarketEvent::ExpiredOrder {
+                        maker_id,
                         order_sequence_number,
                         price_in_ticks,
                         base_lots_removed,
-                        base_lots_remaining,
                     } = event
                     {
+                        assert_eq!(maker_id, &maker);
                         assert_eq!(
                             Side::from_order_sequence_number(*order_sequence_number),
                             Side::Bid
                         );
                         assert_eq!(*price_in_ticks, Ticks::new(1000));
                         assert_eq!(*base_lots_removed, BaseLots::new(80));
-                        assert_eq!(*base_lots_remaining, BaseLots::new(0));
                     } else {
                         panic!("Invalid event")
                     }
