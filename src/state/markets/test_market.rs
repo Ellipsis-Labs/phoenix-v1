@@ -676,6 +676,8 @@ fn test_limit_orders_with_self_trade() {
     assert!(matching_engine_response == res);
     let ladder = market.get_typed_ladder(1);
     assert!(ladder.bids[0].size_in_base_lots == BaseLots::new(5));
+
+    // Try to trade with DecrementTake for more than the order size
     let (order, matching_engine_response) = market
         .place_order(
             &taker,
@@ -693,18 +695,39 @@ fn test_limit_orders_with_self_trade() {
         )
         .unwrap();
     assert!(order.is_some());
-    println!("released quantities: {:?}", matching_engine_response);
     let mut res = MatchingEngineResponse::new_from_sell(
         BaseLots::new(5),
         Ticks::new(100) * market.tick_size_in_quote_lots_per_base_unit * BaseLots::new(5)
             / market.base_lots_per_base_unit,
     );
     res.post_base_lots(BaseLots::new(5));
-    println!("Matching engine response: {:?}", matching_engine_response);
-    println!("Res: {:?}", res);
     assert!(matching_engine_response == res);
     let ladder = market.get_typed_ladder(1);
     assert!(ladder.asks[0].size_in_base_lots == BaseLots::new(5));
+
+    // Try to trade with DecrementTake for less than the order size
+    let (order, matching_engine_response) = market
+        .place_order(
+            &taker,
+            OrderPacket::new_limit_order(
+                Side::Bid,
+                100,
+                1,
+                SelfTradeBehavior::DecrementTake,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .unwrap();
+
+    let res = MatchingEngineResponse::default();
+    assert!(order.is_none());
+    assert!(matching_engine_response == res);
+    let ladder = market.get_typed_ladder(1);
+    assert!(ladder.asks[0].size_in_base_lots == BaseLots::new(4));
 }
 
 #[test]
@@ -2123,6 +2146,7 @@ fn test_tif() {
 
         assert!(matching_engine_response.num_quote_lots_out > QuoteLots::ZERO);
 
+        // Check that order are still not expired on the boundary
         if order_packet.get_last_valid_slot().is_some() {
             mock_clock.slot += 500;
         } else {
@@ -2180,6 +2204,7 @@ fn test_tif() {
         // Assert that TIF kicked in
         assert_eq!(matching_engine_response.num_quote_lots_out, QuoteLots::ZERO);
 
+        // Verify that the events are released in the expected order
         for (i, event) in event_recorder.iter().enumerate() {
             match i {
                 0 => {

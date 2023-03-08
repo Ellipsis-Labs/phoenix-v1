@@ -868,7 +868,7 @@ impl<
                     )
                 }),
             }
-            .unwrap_or(AdjustedQuoteLots::new(u64::MAX));
+            .unwrap_or_else(|| AdjustedQuoteLots::new(u64::MAX));
 
             let mut inflight_order = InflightOrder::new(
                 side,
@@ -912,7 +912,7 @@ impl<
                         - inflight_order.quote_lot_fees
                 }
             };
-            let mut matching_engine_response = match side {
+            let matching_engine_response = match side {
                 Side::Bid => MatchingEngineResponse::new_from_buy(
                     matched_quote_lots,
                     inflight_order.matched_base_lots,
@@ -922,44 +922,6 @@ impl<
                     matched_quote_lots,
                 ),
             };
-
-            // If the trader is a registered trader, check if they have free lots
-            if trader_index != u32::MAX {
-                let trader_state = self.get_trader_state_from_index_mut(trader_index);
-                match side {
-                    Side::Bid => {
-                        let quote_lots_free_to_use =
-                            trader_state.quote_lots_free.min(matched_quote_lots);
-                        trader_state.use_free_quote_lots(quote_lots_free_to_use);
-                        matching_engine_response.use_free_quote_lots(quote_lots_free_to_use);
-                    }
-                    Side::Ask => {
-                        let base_lots_free_to_use = trader_state
-                            .base_lots_free
-                            .min(inflight_order.matched_base_lots);
-                        trader_state.use_free_base_lots(base_lots_free_to_use);
-                        matching_engine_response.use_free_base_lots(base_lots_free_to_use);
-                    }
-                }
-
-                // If the order crosses and only uses deposited funds, then add the matched funds back to the trader's free funds
-                // Set the matching_engine_response lots_out to zero to set token withdrawals to zero
-                if order_packet.no_deposit_or_withdrawal() {
-                    match side {
-                        Side::Bid => {
-                            trader_state
-                                .deposit_free_base_lots(matching_engine_response.num_base_lots_out);
-                            matching_engine_response.num_base_lots_out = BaseLots::ZERO;
-                        }
-                        Side::Ask => {
-                            trader_state.deposit_free_quote_lots(
-                                matching_engine_response.num_quote_lots_out,
-                            );
-                            matching_engine_response.num_quote_lots_out = QuoteLots::ZERO;
-                        }
-                    }
-                }
-            }
 
             record_event_fn(MarketEvent::FillSummary {
                 client_order_id: order_packet.client_order_id(),
@@ -995,15 +957,6 @@ impl<
                     matching_engine_response.num_base_lots(),
                     matching_engine_response.num_quote_lots(),
                 );
-                return None;
-            }
-
-            // Check the trader had enough deposited funds to process the order
-            if order_packet.no_deposit_or_withdrawal()
-                && trader_index != u32::MAX
-                && !matching_engine_response.verify_no_deposit_or_withdrawal()
-            {
-                phoenix_log!("Insufficient deposited funds to process order");
                 return None;
             }
         } else {
@@ -1066,15 +1019,6 @@ impl<
                     }
                 }
 
-                // Check if trader has enough deposited funds to process the order
-                if order_packet.no_deposit_or_withdrawal()
-                    && trader_index != u32::MAX
-                    && !matching_engine_response.verify_no_deposit_or_withdrawal()
-                {
-                    phoenix_log!("Insufficient deposited funds to process order");
-                    return None;
-                }
-
                 // Record the place event
                 record_event_fn(MarketEvent::<MarketTraderId>::Place {
                     order_sequence_number: order_id.order_sequence_number,
@@ -1099,6 +1043,51 @@ impl<
                 self.order_sequence_number += 1;
             }
         }
+
+        // If the trader is a registered trader, check if they have free lots
+        if trader_index != u32::MAX {
+            let trader_state = self.get_trader_state_from_index_mut(trader_index);
+            match side {
+                Side::Bid => {
+                    let quote_lots_free_to_use = trader_state
+                        .quote_lots_free
+                        .min(matching_engine_response.num_quote_lots());
+                    trader_state.use_free_quote_lots(quote_lots_free_to_use);
+                    matching_engine_response.use_free_quote_lots(quote_lots_free_to_use);
+                }
+                Side::Ask => {
+                    let base_lots_free_to_use = trader_state
+                        .base_lots_free
+                        .min(matching_engine_response.num_base_lots());
+                    trader_state.use_free_base_lots(base_lots_free_to_use);
+                    matching_engine_response.use_free_base_lots(base_lots_free_to_use);
+                }
+            }
+
+            // If the order crosses and only uses deposited funds, then add the matched funds back to the trader's free funds
+            // Set the matching_engine_response lots_out to zero to set token withdrawals to zero
+            if order_packet.no_deposit_or_withdrawal() {
+                match side {
+                    Side::Bid => {
+                        trader_state
+                            .deposit_free_base_lots(matching_engine_response.num_base_lots_out);
+                        matching_engine_response.num_base_lots_out = BaseLots::ZERO;
+                    }
+                    Side::Ask => {
+                        trader_state
+                            .deposit_free_quote_lots(matching_engine_response.num_quote_lots_out);
+                        matching_engine_response.num_quote_lots_out = QuoteLots::ZERO;
+                    }
+                }
+
+                // Check if trader has enough deposited funds to process the order
+                if !matching_engine_response.verify_no_deposit_or_withdrawal() {
+                    phoenix_log!("Insufficient deposited funds to process order");
+                    return None;
+                }
+            }
+        }
+
         Some((placed_order_id, matching_engine_response))
     }
 
@@ -1231,9 +1220,9 @@ impl<
             if trader_index == current_trader_index as u64 {
                 match inflight_order.self_trade_behavior {
                     SelfTradeBehavior::Abort => return None,
-                    SelfTradeBehavior::CancelProvide | SelfTradeBehavior::DecrementTake => {
+                    SelfTradeBehavior::CancelProvide => {
                         // This block is entered if the self trade behavior for the crossing order is
-                        // CancelProvide or DecrementTake
+                        // CancelProvide
                         //
                         // We cancel the order from the book and free up the locked quote_lots or base_lots, but
                         // we do not claim them as part of the match
@@ -1246,21 +1235,46 @@ impl<
                             false,
                             record_event_fn,
                         )?;
-                        if inflight_order.self_trade_behavior == SelfTradeBehavior::DecrementTake {
-                            // In the case that the self trade behavior is DecrementTake, we decrement the
-                            // the base lot and adjusted quote lot budgets accordingly
-                            inflight_order.base_lot_budget = inflight_order
-                                .base_lot_budget
-                                .saturating_sub(num_base_lots_quoted);
-                            inflight_order.adjusted_quote_lot_budget =
-                                inflight_order.adjusted_quote_lot_budget.saturating_sub(
-                                    self.tick_size_in_quote_lots_per_base_unit
-                                        * order_id.price_in_ticks
-                                        * num_base_lots_quoted,
-                                );
-                        }
+                        inflight_order.match_limit -= 1;
+                    }
+                    SelfTradeBehavior::DecrementTake => {
+                        let base_lots_removed = inflight_order
+                            .base_lot_budget
+                            .min(
+                                inflight_order
+                                    .adjusted_quote_lot_budget
+                                    .unchecked_div::<QuoteLotsPerBaseUnit, BaseLots>(
+                                        order_id.price_in_ticks
+                                            * self.tick_size_in_quote_lots_per_base_unit,
+                                    ),
+                            )
+                            .min(num_base_lots_quoted);
+
+                        self.reduce_order_inner(
+                            current_trader_index,
+                            &order_id,
+                            inflight_order.side.opposite(),
+                            Some(base_lots_removed),
+                            false,
+                            false,
+                            record_event_fn,
+                        )?;
+                        // In the case that the self trade behavior is DecrementTake, we decrement the
+                        // the base lot and adjusted quote lot budgets accordingly
+                        inflight_order.base_lot_budget = inflight_order
+                            .base_lot_budget
+                            .saturating_sub(base_lots_removed);
+                        inflight_order.adjusted_quote_lot_budget =
+                            inflight_order.adjusted_quote_lot_budget.saturating_sub(
+                                self.tick_size_in_quote_lots_per_base_unit
+                                    * order_id.price_in_ticks
+                                    * base_lots_removed,
+                            );
                         // Self trades will count towards the match limit
                         inflight_order.match_limit -= 1;
+                        // If base_lots_removed < num_base_lots_quoted, then the order budget must be fully
+                        // exhausted
+                        inflight_order.should_terminate = base_lots_removed < num_base_lots_quoted;
                     }
                 }
                 continue;
