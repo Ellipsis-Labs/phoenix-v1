@@ -1482,7 +1482,7 @@ impl<
         order_id: &FIFOOrderId,
         side: Side,
         size: Option<BaseLots>,
-        force_cancelled_or_expired: bool,
+        order_is_expired: bool,
         claim_funds: bool,
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
     ) -> Option<MatchingEngineResponse> {
@@ -1516,7 +1516,7 @@ impl<
                 resting_order.num_base_lots
             };
             // If the order was not cancelled by the maker, we make sure that the maker's id is logged.
-            if force_cancelled_or_expired {
+            if order_is_expired {
                 record_event_fn(MarketEvent::ExpiredOrder {
                     maker_id,
                     order_sequence_number: order_id.order_sequence_number,
