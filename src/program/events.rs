@@ -74,7 +74,7 @@ pub struct TimeInForceEvent {
 }
 
 #[derive(Debug, Copy, Clone, BorshDeserialize, BorshSerialize)]
-pub struct ExpiredOrder {
+pub struct ExpiredOrderEvent {
     pub index: u16,
     pub maker_id: Pubkey,
     pub order_sequence_number: u64,
@@ -93,7 +93,7 @@ pub enum PhoenixMarketEvent {
     FillSummary(FillSummaryEvent),
     Fee(FeeEvent),
     TimeInForce(TimeInForceEvent),
-    ExpiredOrder(ExpiredOrder),
+    ExpiredOrder(ExpiredOrderEvent),
 }
 
 impl Default for PhoenixMarketEvent {
@@ -112,7 +112,7 @@ impl PhoenixMarketEvent {
             Self::Evict(EvictEvent { index, .. }) => *index = i,
             Self::Fee(FeeEvent { index, .. }) => *index = i,
             Self::TimeInForce(TimeInForceEvent { index, .. }) => *index = i,
-            Self::ExpiredOrder(ExpiredOrder { index, .. }) => *index = i,
+            Self::ExpiredOrder(ExpiredOrderEvent { index, .. }) => *index = i,
             _ => panic!("Cannot set index on uninitialized or header event"),
         }
     }
@@ -204,7 +204,7 @@ impl From<MarketEvent<Pubkey>> for PhoenixMarketEvent {
                 order_sequence_number,
                 price_in_ticks,
                 base_lots_removed,
-            } => Self::ExpiredOrder(ExpiredOrder {
+            } => Self::ExpiredOrder(ExpiredOrderEvent {
                 maker_id,
                 order_sequence_number,
                 price_in_ticks: price_in_ticks.into(),
