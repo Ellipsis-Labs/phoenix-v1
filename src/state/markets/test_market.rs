@@ -1426,6 +1426,126 @@ fn test_fok_and_ioc_limit_5() {
     );
 }
 
+#[test]
+fn test_fok_and_ioc_with_free_funds() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
+
+    market.get_or_register_trader(&taker).unwrap();
+
+    let tick_size = market.tick_size_in_quote_lots_per_base_unit;
+    let base_lots_per_base_unit = market.base_lots_per_base_unit;
+    {
+        let trader_state = market.get_trader_state_mut(&taker).unwrap();
+        trader_state.base_lots_free += BaseLots::new(29);
+        trader_state.quote_lots_free +=
+            Ticks::new(103) * tick_size * BaseLots::new(1) / base_lots_per_base_unit;
+    }
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                99,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                98,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                97,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_none());
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                101,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                102,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    let trader_state = market.get_trader_state_mut(&taker).unwrap();
+    println!("trader_state: {:?}", trader_state);
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                103,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_none());
+}
+
 // Base lots = (quote lots * base lots per base unit) / (tick size in quote lots per base unit * price in ticks)
 // Then adjust for fees.
 fn get_min_base_lots_out(
