@@ -775,6 +775,11 @@ impl<
             self.get_or_register_trader(trader_id)?
         };
 
+        if order_packet.num_base_lots() == 0 && order_packet.num_quote_lots() == 0 {
+            phoenix_log!("Either num_base_lots or num_quote_lots must be nonzero");
+            return None;
+        }
+
         // For IOC order types exactly one of num_quote_lots or num_base_lots needs to be specified.
         if let OrderPacket::ImmediateOrCancel {
             num_base_lots,
