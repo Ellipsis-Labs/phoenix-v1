@@ -68,7 +68,20 @@ pub trait Market<
     }
 
     fn get_ladder(&self, levels: u64) -> Ladder {
-        let ladder = self.get_typed_ladder(levels);
+        self.get_ladder_with_expiration(levels, None, None)
+    }
+
+    fn get_ladder_with_expiration(
+        &self,
+        levels: u64,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
+    ) -> Ladder {
+        let ladder = self.get_typed_ladder_with_expiration(
+            levels,
+            last_valid_slot,
+            last_valid_unix_timestamp_in_seconds,
+        );
         Ladder {
             bids: ladder
                 .bids
