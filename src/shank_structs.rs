@@ -40,6 +40,8 @@ enum OrderPacket {
         client_order_id: u128,
         reject_post_only: bool,
         use_only_deposited_funds: bool,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     },
     Limit {
         side: Side,
@@ -49,6 +51,8 @@ enum OrderPacket {
         match_limit: Option<u64>,
         client_order_id: u128,
         use_only_deposited_funds: bool,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     },
     ImmediateOrCancel {
         side: Side,
