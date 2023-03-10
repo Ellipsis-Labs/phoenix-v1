@@ -156,17 +156,33 @@ impl FIFORestingOrder {
             last_valid_unix_timestamp_in_seconds,
         }
     }
-
-    pub fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
-        (self.last_valid_slot != 0 && self.last_valid_slot < current_slot)
-            || (self.last_valid_unix_timestamp_in_seconds != 0
-                && self.last_valid_unix_timestamp_in_seconds < current_unix_timestamp_in_seconds)
-    }
 }
 
 impl RestingOrder for FIFORestingOrder {
     fn size(&self) -> u64 {
         self.num_base_lots.as_u64()
+    }
+
+    fn last_valid_slot(&self) -> Option<u64> {
+        if self.last_valid_slot == 0 {
+            None
+        } else {
+            Some(self.last_valid_slot)
+        }
+    }
+
+    fn last_valid_unix_timestamp_in_seconds(&self) -> Option<u64> {
+        if self.last_valid_unix_timestamp_in_seconds == 0 {
+            None
+        } else {
+            Some(self.last_valid_unix_timestamp_in_seconds)
+        }
+    }
+
+    fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool {
+        (self.last_valid_slot != 0 && self.last_valid_slot < current_slot)
+            || (self.last_valid_unix_timestamp_in_seconds != 0
+                && self.last_valid_unix_timestamp_in_seconds < current_unix_timestamp_in_seconds)
     }
 }
 

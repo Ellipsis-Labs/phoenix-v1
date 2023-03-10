@@ -43,6 +43,9 @@ pub trait OrderId {
 
 pub trait RestingOrder {
     fn size(&self) -> u64;
+    fn last_valid_slot(&self) -> Option<u64>;
+    fn last_valid_unix_timestamp_in_seconds(&self) -> Option<u64>;
+    fn is_expired(&self, current_slot: u64, current_unix_timestamp_in_seconds: u64) -> bool;
 }
 
 /// A wrapper around an matching algorithm implementation that allows arbitrary structs to be
@@ -87,6 +90,18 @@ pub trait Market<
     }
 
     fn get_typed_ladder(&self, levels: u64) -> TypedLadder {
+        self.get_typed_ladder_with_expiration(levels, None, None)
+    }
+
+    fn get_typed_ladder_with_expiration(
+        &self,
+        levels: u64,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
+    ) -> TypedLadder {
+        let slot_expiration = last_valid_slot.unwrap_or_else(|| u64::MAX);
+        let unix_timestamp_expiration =
+            last_valid_unix_timestamp_in_seconds.unwrap_or_else(|| u64::MAX);
         let mut bids = vec![];
         let mut asks = vec![];
         for (side, book) in [(Side::Bid, &mut bids), (Side::Ask, &mut asks)].iter_mut() {
@@ -94,8 +109,12 @@ pub trait Market<
                 &self
                     .get_book(*side)
                     .iter()
-                    .map(|(order_id, resting_order)| {
-                        (order_id.price_in_ticks(), resting_order.size())
+                    .filter_map(|(order_id, resting_order)| {
+                        if resting_order.is_expired(slot_expiration, unix_timestamp_expiration) {
+                            None
+                        } else {
+                            Some((order_id.price_in_ticks(), resting_order.size()))
+                        }
                     })
                     .group_by(|(price_in_ticks, _)| *price_in_ticks)
                     .into_iter()
