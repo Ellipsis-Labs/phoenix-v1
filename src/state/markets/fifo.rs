@@ -1102,8 +1102,14 @@ impl<
                 }
 
                 // Check if trader has enough deposited funds to process the order
-                if !matching_engine_response.verify_no_deposit_or_withdrawal() {
-                    phoenix_log!("Insufficient deposited funds to process order");
+                if !matching_engine_response.verify_no_deposit() {
+                    phoenix_log!("Trader does not have enough deposited funds to process order");
+                    return None;
+                }
+
+                // Check that the matching engine response does not withdraw any base or quote lots
+                if !matching_engine_response.verify_no_withdrawal() {
+                    phoenix_log!("Matching engine response withdraws base or quote lots");
                     return None;
                 }
             }
