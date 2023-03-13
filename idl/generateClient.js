@@ -1,4 +1,5 @@
 const { Solita } = require("@metaplex-foundation/solita");
+const { spawn } = require("child_process");
 
 const path = require("path");
 const idlDir = __dirname;
@@ -8,7 +9,16 @@ const PROGRAM_NAME = "phoenix_v1";
 
 async function main() {
   generateTypeScriptSDK().then(() => {
-    conoole.log("done");
+    console.log("Running prettier on generated files...");
+    spawn("prettier", ["--write", sdkDir], { stdio: "inherit" })
+      .on("error", (err) => {
+        console.error(
+          "Failed to lint client files. Try installing prettier (`npm install --save-dev --save-exact prettier`)"
+        );
+      })
+      .on("exit", () => {
+        console.log("Finished linting files.");
+      });
   });
 }
 
@@ -18,8 +28,6 @@ async function generateTypeScriptSDK() {
   const idl = require(generatedIdlPath);
   const gen = new Solita(idl, { formatCode: true });
   await gen.renderAndWriteTo(sdkDir);
-  console.error("Success!");
-  process.exit(0);
 }
 
 main().catch((err) => {
