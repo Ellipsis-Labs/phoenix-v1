@@ -275,13 +275,13 @@ async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> Phoenix
             vec![
                 system_instruction::transfer(
                     &sdk.client.payer.pubkey(),
-                    &get_seat_address(&sdk.active_market_key, &maker.user.pubkey()).0,
+                    &get_seat_address(&sdk.active_market_key.unwrap(), &maker.user.pubkey()).0,
                     5000,
                 ),
                 create_request_seat_authorized_instruction(
                     &sdk.client.payer.pubkey(),
                     &sdk.client.payer.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     &maker.user.pubkey(),
                 ),
             ],
@@ -294,7 +294,7 @@ async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> Phoenix
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &sdk.client.payer.pubkey(),
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &maker.user.pubkey(),
                 SeatApprovalStatus::Approved,
             )],
@@ -316,7 +316,7 @@ async fn test_phoenix_request_seats() {
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
-    let market = &sdk.core.active_market_key;
+    let market = &sdk.core.active_market_key.unwrap();
     // Don't use the default_maker since we are testing the request_seats instruction
     let maker = Keypair::new();
     airdrop(&sdk.client, &maker.pubkey(), sol(20.0))
@@ -529,7 +529,7 @@ async fn test_phoenix_orders() {
         OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1);
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -540,7 +540,7 @@ async fn test_phoenix_orders() {
         OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(99.0), 1);
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -550,7 +550,7 @@ async fn test_phoenix_orders() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(101.0), 1);
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -561,7 +561,7 @@ async fn test_phoenix_orders() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(102.0), 1);
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -574,7 +574,7 @@ async fn test_phoenix_orders() {
         .client
         .sign_send_instructions(
             vec![create_new_order_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -591,7 +591,7 @@ async fn test_phoenix_orders() {
         .client
         .sign_send_instructions(
             vec![create_new_order_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -611,7 +611,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -635,7 +635,7 @@ async fn test_phoenix_orders() {
     assert_eq!(base_start, 999999998000000);
     assert_eq!(quote_start, 999999801000);
 
-    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key.unwrap()).await;
 
     let cancel_orders = vec![
         CancelOrderParams {
@@ -653,7 +653,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -668,7 +668,7 @@ async fn test_phoenix_orders() {
 
     let mut base_end = get_token_balance(&sdk.client, default_maker.base_ata).await;
     let mut quote_end = get_token_balance(&sdk.client, default_maker.quote_ata).await;
-    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key.unwrap()).await;
 
     // maker receives base tokens
     assert_eq!(base_end, 1000000000000000);
@@ -681,7 +681,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -715,7 +715,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -774,7 +774,7 @@ async fn test_phoenix_cancel_all_orders() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1);
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -785,7 +785,7 @@ async fn test_phoenix_cancel_all_orders() {
         OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(99.0), 1);
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -795,7 +795,7 @@ async fn test_phoenix_cancel_all_orders() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(101.0), 1);
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -806,7 +806,7 @@ async fn test_phoenix_cancel_all_orders() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(102.0), 1);
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -814,12 +814,12 @@ async fn test_phoenix_cancel_all_orders() {
     ));
 
     sdk.client.set_payer(&payer_key).unwrap();
-    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key.unwrap()).await;
 
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_all_orders_instruction(
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -831,7 +831,7 @@ async fn test_phoenix_cancel_all_orders() {
 
     let base_end = get_token_balance(&sdk.client, default_maker.base_ata).await;
     let quote_end = get_token_balance(&sdk.client, default_maker.quote_ata).await;
-    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key.unwrap()).await;
 
     // maker receives base tokens
     assert_eq!(base_end, 1000000000000000);
@@ -857,14 +857,14 @@ async fn test_phoenix_admin() {
     let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
-    let market = sdk.active_market_key;
+    let market = sdk.active_market_key.unwrap();
 
     let mut orders = vec![];
 
     let payer_key = sdk.client.payer.pubkey();
     sdk.set_payer(clone_keypair(&default_maker.user));
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -872,7 +872,7 @@ async fn test_phoenix_admin() {
     ));
     // Place a bid at 99
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -880,7 +880,7 @@ async fn test_phoenix_admin() {
     ));
     // Place an ask at 101
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -889,7 +889,7 @@ async fn test_phoenix_admin() {
 
     // Place an ask at 102
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -987,7 +987,7 @@ async fn test_phoenix_admin() {
         sdk.client
             .sign_send_instructions(
                 vec![create_new_order_instruction(
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     &default_taker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1005,7 +1005,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Closed
                 )],
                 vec![&successor],
@@ -1020,7 +1020,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &admin.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Paused
                 )],
                 vec![&admin],
@@ -1035,7 +1035,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Paused
                 )],
                 vec![&successor],
@@ -1049,7 +1049,7 @@ async fn test_phoenix_admin() {
         sdk.client
             .sign_send_instructions(
                 vec![create_cancel_up_to_instruction(
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     &default_maker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1071,7 +1071,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Active
                 )],
                 vec![&successor],
@@ -1085,7 +1085,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Paused
                 )],
                 vec![&successor],
@@ -1102,7 +1102,7 @@ async fn test_phoenix_admin() {
         sdk.client
             .sign_send_instructions(
                 vec![create_new_order_instruction(
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     &default_taker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1119,7 +1119,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Closed,
                 )],
                 vec![&successor],
@@ -1133,7 +1133,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Tombstoned,
                 )],
                 vec![&successor],
@@ -1148,7 +1148,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![
                     create_cancel_up_to_instruction(
-                        &sdk.core.active_market_key,
+                        &sdk.core.active_market_key.unwrap(),
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1160,7 +1160,7 @@ async fn test_phoenix_admin() {
                         },
                     ),
                     create_cancel_up_to_instruction(
-                        &sdk.core.active_market_key,
+                        &sdk.core.active_market_key.unwrap(),
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1187,7 +1187,7 @@ async fn test_phoenix_admin() {
                     // call withdraw
                     create_evict_seat_instruction(
                         &successor.pubkey(),
-                        &sdk.core.active_market_key,
+                        &sdk.core.active_market_key.unwrap(),
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1204,7 +1204,7 @@ async fn test_phoenix_admin() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &successor.pubkey(),
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 &default_maker.user.pubkey(),
                 SeatApprovalStatus::NotApproved,
             )],
@@ -1221,7 +1221,7 @@ async fn test_phoenix_admin() {
                     // call withdraw
                     create_evict_seat_instruction(
                         &successor.pubkey(),
-                        &sdk.core.active_market_key,
+                        &sdk.core.active_market_key.unwrap(),
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1239,7 +1239,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    &sdk.core.active_market_key.unwrap(),
                     MarketStatus::Tombstoned
                 )],
                 vec![&successor],
@@ -1253,7 +1253,7 @@ async fn test_phoenix_admin() {
     sdk.client
         .sign_send_instructions(
             vec![create_collect_fees_instruction_default(
-                &sdk.active_market_key,
+                &sdk.active_market_key.unwrap(),
                 &sdk.client.payer.pubkey(),
                 &sdk.client.payer.pubkey(), // Fee collector is the market creator in this case
                 quote_mint,
@@ -1267,7 +1267,7 @@ async fn test_phoenix_admin() {
         .sign_send_instructions(
             vec![create_change_market_status_instruction(
                 &successor.pubkey(),
-                &sdk.core.active_market_key,
+                &sdk.core.active_market_key.unwrap(),
                 MarketStatus::Tombstoned,
             )],
             vec![&successor],
@@ -1327,7 +1327,7 @@ async fn test_phoenix_basic() {
     let quote_start = get_token_balance(&sdk.client, default_taker.quote_ata).await;
 
     let new_order_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1350,7 +1350,7 @@ async fn test_phoenix_basic() {
     let quote_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
 
     let withdraw_ix = create_withdraw_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1372,7 +1372,7 @@ async fn test_phoenix_basic() {
     };
 
     let cancel_multiple_ix = create_cancel_up_to_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1413,7 +1413,7 @@ async fn test_phoenix_basic() {
     let quote_after_cancel = get_token_balance(&sdk.client, default_maker.quote_ata).await;
     assert!(quote_after_cancel == 1_000_000_000_000 - 398750000);
     let deposit_ix = create_deposit_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1439,7 +1439,7 @@ async fn test_phoenix_basic() {
     let base_before_withdraw = base_after_deposit;
     let quote_before_withdraw = quote_after_deposit;
     let withdraw_ix = create_withdraw_funds_with_custom_amounts_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1480,7 +1480,7 @@ async fn test_phoenix_fees() {
     let limit_order =
         OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1000);
     let make_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1502,7 +1502,7 @@ async fn test_phoenix_fees() {
         false,
     );
     let take_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1525,7 +1525,7 @@ async fn test_phoenix_fees() {
 
     let change_fee_recipient_ix = create_change_fee_recipient_instruction(
         &admin.pubkey(),
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &new_fee_recipient.user.pubkey(),
     );
 
@@ -1539,7 +1539,7 @@ async fn test_phoenix_fees() {
 
     let change_fee_recipient_ix = create_change_fee_recipient_with_unclaimed_fees_instruction(
         &admin.pubkey(),
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &new_fee_recipient.user.pubkey(),
         &admin.pubkey(),
     );
@@ -1553,14 +1553,14 @@ async fn test_phoenix_fees() {
     );
 
     let collect_fees_ix = create_collect_fees_instruction_default(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &admin.pubkey(),
         &new_fee_recipient.user.pubkey(),
         quote_mint,
     );
     let fee_ata = get_associated_token_address(&new_fee_recipient.user.pubkey(), quote_mint);
     let fee_dest_start = get_token_balance(&sdk.client, fee_ata).await;
-    let quote_vault = get_vault_address(&sdk.core.active_market_key, quote_mint).0;
+    let quote_vault = get_vault_address(&sdk.core.active_market_key.unwrap(), quote_mint).0;
     let quote_balance_start = get_token_balance(&sdk.client, quote_vault).await;
 
     sdk.client
@@ -1579,7 +1579,7 @@ async fn test_phoenix_fees() {
     assert_eq!(quote_balance_end, 0);
     assert_eq!(fee_dest_balance - fee_dest_start, 50000);
 
-    let market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
+    let market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key.unwrap()))
         .await
         .unwrap();
     let (header_bytes, bytes) = market_account_data.split_at(size_of::<MarketHeader>());
@@ -1598,7 +1598,7 @@ async fn test_phoenix_fees() {
 
     let change_fee_recipient_ix = create_change_fee_recipient_instruction(
         &admin.pubkey(),
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &Keypair::new().pubkey(),
     );
 
@@ -1616,7 +1616,7 @@ async fn test_phoenix_cancel_with_free_funds() {
     let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext { default_maker, .. } = &ctx;
     let meta = *sdk.get_active_market_metadata();
-    let market = sdk.active_market_key;
+    let market = sdk.active_market_key.unwrap();
     sdk.client.set_payer(&default_maker.user.pubkey()).unwrap();
     let quote_lots_to_deposit = sdk.quote_units_to_quote_lots(10000.0);
     let base_lots_to_deposit = sdk.raw_base_units_to_base_lots(100.0);
@@ -1832,7 +1832,7 @@ async fn test_phoenix_orders_with_free_funds() {
     );
 
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_taker.user.pubkey(),
         &sell_params,
     );
@@ -1889,7 +1889,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for param in taker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &default_taker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -1903,7 +1903,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for param in maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -1927,7 +1927,7 @@ async fn test_phoenix_orders_with_free_funds() {
     //Attempt to send a LimitOrderWithFreeFunds with the second maker that will fail due to insufficient funds
     sdk.client.payer = clone_keypair(&second_maker.user);
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
         &OrderPacket::new_post_only_default(
             Side::Bid,
@@ -1977,7 +1977,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let maker_ioc_params = vec![ioc_buy_params, ioc_sell_params];
     for param in second_maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -1992,7 +1992,7 @@ async fn test_phoenix_orders_with_free_funds() {
     sdk.set_payer(clone_keypair(&default_maker.user));
     for param in maker_ioc_params {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             &param,
         );
@@ -2025,7 +2025,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for param in maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2050,7 +2050,7 @@ async fn test_phoenix_orders_with_free_funds() {
     let second_maker_quote_balance_start =
         get_token_balance(&sdk.client, second_maker.quote_ata).await;
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
         &OrderPacket::new_ioc_by_lots(
             Side::Bid,
@@ -2091,7 +2091,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2137,7 +2137,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2163,7 +2163,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     // Cancel all to free up some funds
     let cancel_all_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
     );
 
@@ -2195,7 +2195,7 @@ async fn test_phoenix_orders_with_free_funds() {
     //Check that sending an orderpacket with free funds set to true fails if we send via the wrong instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2211,7 +2211,7 @@ async fn test_phoenix_orders_with_free_funds() {
     // Free funds order packet succeeds with correct instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2244,7 +2244,7 @@ async fn test_phoenix_orders_with_free_funds() {
     // Order packet with free funds set to false fails if we send via the free funds instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2311,7 +2311,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2329,7 +2329,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     assert_eq!(quote_balance_start - quote_balance_end, 170000000);
 
     let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
     );
 
@@ -2367,7 +2367,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2418,7 +2418,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2467,7 +2467,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         ],
     );
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2491,7 +2491,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     // Cancel orders to return the orderbook to empty
     let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
     );
 
@@ -2525,7 +2525,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2567,7 +2567,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2603,7 +2603,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2640,7 +2640,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2668,7 +2668,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2733,7 +2733,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2758,7 +2758,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     // Cancel orders for both makers to return the orderbook to empty
     let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
     );
 
@@ -2768,7 +2768,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .unwrap();
 
     let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
     );
 
@@ -2798,7 +2798,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2835,7 +2835,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2867,7 +2867,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &second_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2922,7 +2922,7 @@ async fn layer_orders(
     for (p, s) in prices.iter().zip(sizes.iter()) {
         let params = OrderPacket::new_limit_order_default(side, *p, *s);
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &sdk.get_trader(),
             &meta.base_mint,
             &meta.quote_mint,
@@ -3062,7 +3062,7 @@ async fn test_phoenix_place_multiple_memory_management() {
     let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         &sdk.base_mint,
         &sdk.quote_mint,
@@ -3085,7 +3085,7 @@ async fn test_phoenix_place_multiple_memory_management() {
             vec![
                 ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
                 create_new_order_instruction(
-                    &sdk.active_market_key,
+                    &sdk.active_market_key.unwrap(),
                     &default_taker.user.pubkey(),
                     &sdk.base_mint,
                     &sdk.quote_mint,
@@ -3136,7 +3136,7 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
         let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
 
         let new_order_ix = create_new_multiple_order_instruction(
-            &sdk.core.active_market_key,
+            &sdk.core.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3172,7 +3172,7 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
         false,
     );
     let ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        &sdk.active_market_key.unwrap(),
         &default_taker.user.pubkey(),
         &sdk.base_mint,
         &sdk.quote_mint,
@@ -3265,7 +3265,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         );
 
         let bid_ix = create_new_order_instruction(
-            &sdk.active_market_key,
+            &sdk.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3273,7 +3273,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         );
 
         let ask_ix = create_new_order_instruction(
-            &sdk.active_market_key,
+            &sdk.active_market_key.unwrap(),
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3317,7 +3317,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     );
 
     let new_order_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -3347,7 +3347,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     let quote_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
 
     let withdraw_ix = create_withdraw_funds_instruction(
-        &sdk.core.active_market_key,
+        &sdk.core.active_market_key.unwrap(),
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
