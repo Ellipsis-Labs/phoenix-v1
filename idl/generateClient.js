@@ -10,6 +10,8 @@ const PROGRAM_NAME = "phoenix_v1";
 async function main() {
   generateTypeScriptSDK().then(() => {
     console.log("Running prettier on generated files...");
+    // Note: prettier is not a dependency of this package, so it must be installed
+    // TODO: Add a prettier config file for consistent style
     spawn("prettier", ["--write", sdkDir], { stdio: "inherit" })
       .on("error", (err) => {
         console.error(
