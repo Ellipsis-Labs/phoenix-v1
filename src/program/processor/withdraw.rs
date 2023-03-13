@@ -81,7 +81,7 @@ pub(crate) fn process_withdraw<'a, 'info>(
                 base_lots_to_withdraw.map(BaseLots::new),
                 evict_seat,
             )
-            .ok_or(PhoenixError::ReduceOrderError)?;
+            .ok_or(PhoenixError::WithdrawFundsError)?;
         sol_log_compute_units();
         if evict_seat {
             assert_with_msg(
