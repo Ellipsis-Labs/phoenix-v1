@@ -371,6 +371,10 @@ fn process_new_order<'a, 'info>(
                     )?;
                 }
             }
+        } else {
+            // Should never execute as the account loading logic should fail
+            phoenix_log!("WARNING: Vault context was not provided");
+            return Err(PhoenixError::NewOrderError.into());
         }
     } else if quote_atoms_to_deposit > QuoteAtoms::ZERO || base_atoms_to_deposit > BaseAtoms::ZERO {
         // Should never execute as the matching engine should return None in this case
@@ -507,6 +511,10 @@ fn process_multiple_new_orders<'a, 'info>(
                     "Expected base_lots_to_deposit to be zero",
                 )?;
             }
+        } else {
+            // Should never execute as the account loading logic should fail
+            phoenix_log!("WARNING: Vault context was not provided");
+            return Err(PhoenixError::NewOrderError.into());
         }
     } else if base_lots_to_deposit > BaseLots::ZERO || quote_lots_to_deposit > QuoteLots::ZERO {
         phoenix_log!("Deposited amount of funds were insufficient to execute the order");

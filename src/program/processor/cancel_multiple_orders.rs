@@ -90,6 +90,19 @@ pub(crate) fn process_cancel_all_orders<'a, 'info>(
             num_quote_lots_out * header.get_quote_lot_size(),
             num_base_lots_out * header.get_base_lot_size(),
         )?;
+    } else {
+        // This case is only reached if the user is cancelling orders with free funds
+        // In this case, there should be no funds to claim
+        assert_with_msg(
+            num_quote_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_quote_lots_out must be 0",
+        )?;
+        assert_with_msg(
+            num_base_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_base_lots_out must be 0",
+        )?;
     }
 
     drop(header);
@@ -214,6 +227,19 @@ pub(crate) fn process_cancel_multiple_orders_by_id<'a, 'info>(
             num_quote_lots_out * header.get_quote_lot_size(),
             num_base_lots_out * header.get_base_lot_size(),
         )?;
+    } else {
+        // This case is only reached if the user is cancelling orders with free funds
+        // In this case, there should be no funds to claim
+        assert_with_msg(
+            num_quote_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_quote_lots_out must be 0",
+        )?;
+        assert_with_msg(
+            num_base_lots_out == 0,
+            PhoenixError::CancelMultipleOrdersError,
+            "num_base_lots_out must be 0",
+        )?;
     }
 
     Ok(())
@@ -281,7 +307,7 @@ pub(crate) fn process_cancel_orders<'a, 'info>(
             num_base_lots_out * header.get_base_lot_size(),
         )?;
     } else {
-        // This case is only reached if the user invoked CancelUpToWithFreeFunds
+        // This case is only reached if the user is cancelling orders with free funds
         // In this case, there should be no funds to claim
         assert_with_msg(
             num_quote_lots_out == 0,
