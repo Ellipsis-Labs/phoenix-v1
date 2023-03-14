@@ -822,7 +822,8 @@ impl<
 
         if order_packet.is_expired(current_slot, current_unix_timestamp) {
             phoenix_log!("Order parameters include a last_valid_slot or last_valid_unix_timestamp_in_seconds in the past, skipping matching and posting");
-            return None;
+            // Fail softly if the order is expired
+            return Some((None, MatchingEngineResponse::default()));
         }
 
         let (resting_order, mut matching_engine_response) = if let OrderPacket::PostOnly {

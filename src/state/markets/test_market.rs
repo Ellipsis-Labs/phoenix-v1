@@ -1404,7 +1404,7 @@ fn test_fok_and_ioc_limit_5() {
 
     let mut mock_clock_fn = || (1000, 1000);
 
-    assert!(
+    assert_eq!(
         market
             .place_order(
                 &taker,
@@ -1425,11 +1425,12 @@ fn test_fok_and_ioc_limit_5() {
                 &mut record_event_fn,
                 &mut mock_clock_fn,
             )
-            .is_none(),
-        "Order is expired"
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
     );
 
-    assert!(
+    assert_eq!(
         market
             .place_order(
                 &taker,
@@ -1450,8 +1451,9 @@ fn test_fok_and_ioc_limit_5() {
                 &mut record_event_fn,
                 &mut mock_clock_fn,
             )
-            .is_none(),
-        "Order is expired"
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
     );
 
     assert!(
@@ -2269,14 +2271,18 @@ fn test_tif() {
                 timestamp: now.duration_since(UNIX_EPOCH).unwrap().as_secs() + 2000,
             };
             let mut mock_clock_fn = || (expired_mock_clock.slot, expired_mock_clock.timestamp);
-            assert!(market
-                .place_order(
-                    &maker,
-                    order_packet,
-                    &mut record_event_fn,
-                    &mut mock_clock_fn,
-                )
-                .is_none());
+            assert_eq!(
+                market
+                    .place_order(
+                        &maker,
+                        order_packet,
+                        &mut record_event_fn,
+                        &mut mock_clock_fn,
+                    )
+                    .unwrap()
+                    .1,
+                MatchingEngineResponse::default()
+            );
         }
 
         {
