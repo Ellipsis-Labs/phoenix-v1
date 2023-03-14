@@ -2099,7 +2099,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a53d79ba8304ac1c4f9eb3b9d281f21f7be9d4626f72ce7df4ad8fbde4f38a74"
 dependencies = [
  "modular-bitfield-impl",
- "static_assertions 1.1.0",
+ "static_assertions",
 ]
 
 [[package]]
@@ -2478,29 +2478,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "phoenix"
-version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-v1?rev=640bcdf#640bcdf553e9513fb3dcae4adc27806e2b97e4f8"
-dependencies = [
- "borsh 0.9.3",
- "bytemuck",
- "ellipsis-macros",
- "itertools",
- "lib-sokoban",
- "num_enum",
- "shank 0.0.9",
- "solana-program",
- "solana-security-txt",
- "spl-associated-token-account",
- "spl-token",
- "static_assertions 0.1.1",
- "thiserror",
-]
-
-[[package]]
 name = "phoenix-sdk"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=adb01a3#adb01a3780f61ad7ac281a3797864a8194df7266"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?branch=update-rust-sdk#fce13e4d7ea9e7b6eb51f1e7b36b0257fd929b5b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2512,11 +2492,12 @@ dependencies = [
  "futures 0.3.26",
  "itertools",
  "num-traits",
- "phoenix",
  "phoenix-sdk-core",
+ "phoenix-v1 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "rust_decimal",
  "rust_decimal_macros",
+ "serde",
  "solana-client",
  "solana-program",
  "solana-sdk",
@@ -2528,13 +2509,13 @@ dependencies = [
 [[package]]
 name = "phoenix-sdk-core"
 version = "0.1.0"
-source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?rev=adb01a3#adb01a3780f61ad7ac281a3797864a8194df7266"
+source = "git+https://github.com/Ellipsis-Labs/phoenix-sdk?branch=update-rust-sdk#fce13e4d7ea9e7b6eb51f1e7b36b0257fd929b5b"
 dependencies = [
  "anyhow",
  "borsh 0.9.3",
  "itertools",
  "num-traits",
- "phoenix",
+ "phoenix-v1 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "rust_decimal",
  "rust_decimal_macros",
@@ -2555,15 +2536,36 @@ dependencies = [
  "num_enum",
  "phoenix-sdk",
  "rand 0.7.3",
- "shank 0.0.12",
+ "shank",
  "solana-program",
  "solana-sdk",
  "solana-security-txt",
  "spl-associated-token-account",
  "spl-token",
- "static_assertions 1.1.0",
+ "static_assertions",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "phoenix-v1"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64366b3a050af1ad0511ed9f247851bbfeb92ad8a6305e99e2f40f3405136b98"
+dependencies = [
+ "borsh 0.9.3",
+ "bytemuck",
+ "ellipsis-macros",
+ "itertools",
+ "lib-sokoban",
+ "num_enum",
+ "shank",
+ "solana-program",
+ "solana-security-txt",
+ "spl-associated-token-account",
+ "spl-token",
+ "static_assertions",
+ "thiserror",
 ]
 
 [[package]]
@@ -3405,32 +3407,11 @@ dependencies = [
 
 [[package]]
 name = "shank"
-version = "0.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b54c657cbe18aaff6d5042a4d48f643fdd2a826dfc7161de98ee28e5bd7e85e0"
-dependencies = [
- "shank_macro 0.0.9",
-]
-
-[[package]]
-name = "shank"
 version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439c00542aa8b4c777750b3130ce36fcff86ba215d54006d47d67359513b70be"
 dependencies = [
- "shank_macro 0.0.12",
-]
-
-[[package]]
-name = "shank_macro"
-version = "0.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43a02ae007b64b177f4dbb21d322f276458e4860f9fefbd8b9b791c21644ab"
-dependencies = [
- "proc-macro2 1.0.51",
- "quote 1.0.23",
- "shank_macro_impl 0.0.9",
- "syn 1.0.107",
+ "shank_macro",
 ]
 
 [[package]]
@@ -3441,21 +3422,8 @@ checksum = "3498d6ea2ba012f26ad3d79a19773ba8e1c7a69f14dec67e3ed51c723cc9f30a"
 dependencies = [
  "proc-macro2 1.0.51",
  "quote 1.0.23",
- "shank_macro_impl 0.0.12",
+ "shank_macro_impl",
  "shank_render",
- "syn 1.0.107",
-]
-
-[[package]]
-name = "shank_macro_impl"
-version = "0.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d36cdf68202db080a13ef0300c369fc691695265e3d0ab0fa08d4734b0cfb66"
-dependencies = [
- "anyhow",
- "proc-macro2 1.0.51",
- "quote 1.0.23",
- "serde",
  "syn 1.0.107",
 ]
 
@@ -3480,7 +3448,7 @@ checksum = "142e11124c70d1702424011209621551adf775988033dedea428ce4a21d3acdf"
 dependencies = [
  "proc-macro2 1.0.51",
  "quote 1.0.23",
- "shank_macro_impl 0.0.12",
+ "shank_macro_impl",
 ]
 
 [[package]]
@@ -4420,12 +4388,6 @@ dependencies = [
 
 [[package]]
 name = "static_assertions"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f406d6ee68db6796e11ffd7b4d171864c58b7451e79ef9460ea33c287a1f89a7"
-
-[[package]]
-name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
@@ -4535,7 +4497,7 @@ dependencies = [
  "pin-project",
  "rand 0.8.5",
  "serde",
- "static_assertions 1.1.0",
+ "static_assertions",
  "tarpc-plugins",
  "thiserror",
  "tokio",
