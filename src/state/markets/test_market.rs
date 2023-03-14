@@ -1402,6 +1402,58 @@ fn test_fok_and_ioc_limit_5() {
         )
         .is_none());
 
+    let mut mock_clock_fn = || (1000, 1000);
+
+    assert!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    Some(2),
+                    None
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .is_none(),
+        "Order is expired"
+    );
+
+    assert!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    None,
+                    Some(2),
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .is_none(),
+        "Order is expired"
+    );
+
     assert!(
         market
             .place_order(
