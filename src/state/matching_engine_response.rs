@@ -94,8 +94,13 @@ impl MatchingEngineResponse {
     }
 
     #[inline(always)]
-    pub fn verify_no_deposit_or_withdrawal(&self) -> bool {
+    pub fn verify_no_deposit(&self) -> bool {
         self.num_base_lots_in + self.num_base_lots_posted == self.num_free_base_lots_used
             && self.num_quote_lots_in + self.num_quote_lots_posted == self.num_free_quote_lots_used
+    }
+
+    #[inline(always)]
+    pub fn verify_no_withdrawal(&self) -> bool {
+        self.num_base_lots_out == BaseLots::ZERO && self.num_quote_lots_out == QuoteLots::ZERO
     }
 }
