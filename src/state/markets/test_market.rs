@@ -676,6 +676,8 @@ fn test_limit_orders_with_self_trade() {
     assert!(matching_engine_response == res);
     let ladder = market.get_typed_ladder(1);
     assert!(ladder.bids[0].size_in_base_lots == BaseLots::new(5));
+
+    // Try to trade with DecrementTake for more than the order size
     let (order, matching_engine_response) = market
         .place_order(
             &taker,
@@ -693,18 +695,39 @@ fn test_limit_orders_with_self_trade() {
         )
         .unwrap();
     assert!(order.is_some());
-    println!("released quantities: {:?}", matching_engine_response);
     let mut res = MatchingEngineResponse::new_from_sell(
         BaseLots::new(5),
         Ticks::new(100) * market.tick_size_in_quote_lots_per_base_unit * BaseLots::new(5)
             / market.base_lots_per_base_unit,
     );
     res.post_base_lots(BaseLots::new(5));
-    println!("Matching engine response: {:?}", matching_engine_response);
-    println!("Res: {:?}", res);
     assert!(matching_engine_response == res);
     let ladder = market.get_typed_ladder(1);
     assert!(ladder.asks[0].size_in_base_lots == BaseLots::new(5));
+
+    // Try to trade with DecrementTake for less than the order size
+    let (order, matching_engine_response) = market
+        .place_order(
+            &taker,
+            OrderPacket::new_limit_order(
+                Side::Bid,
+                100,
+                1,
+                SelfTradeBehavior::DecrementTake,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .unwrap();
+
+    let res = MatchingEngineResponse::default();
+    assert!(order.is_none());
+    assert!(matching_engine_response == res);
+    let ladder = market.get_typed_ladder(1);
+    assert!(ladder.asks[0].size_in_base_lots == BaseLots::new(4));
 }
 
 #[test]
@@ -1401,6 +1424,126 @@ fn test_fok_and_ioc_limit_5() {
             .is_none(),
         "Only one of num_base_lots or num_quote_lots should be set"
     );
+}
+
+#[test]
+fn test_fok_and_ioc_with_free_funds() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = Box::new(setup_market());
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    seed_market_with_orders(&trader, &mut market, &mut record_event_fn);
+
+    market.get_or_register_trader(&taker).unwrap();
+
+    let tick_size = market.tick_size_in_quote_lots_per_base_unit;
+    let base_lots_per_base_unit = market.base_lots_per_base_unit;
+    {
+        let trader_state = market.get_trader_state_mut(&taker).unwrap();
+        trader_state.base_lots_free += BaseLots::new(29);
+        trader_state.quote_lots_free +=
+            Ticks::new(103) * tick_size * BaseLots::new(1) / base_lots_per_base_unit;
+    }
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                99,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                98,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_sell_with_limit_price(
+                97,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_none());
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                101,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                false,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                102,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    let trader_state = market.get_trader_state_mut(&taker).unwrap();
+    println!("trader_state: {:?}", trader_state);
+
+    assert!(market
+        .place_order(
+            &taker,
+            OrderPacket::new_fok_buy_with_limit_price(
+                103,
+                10,
+                SelfTradeBehavior::Abort,
+                None,
+                rng.gen::<u128>(),
+                true,
+            ),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_none());
 }
 
 // Base lots = (quote lots * base lots per base unit) / (tick size in quote lots per base unit * price in ticks)
@@ -2123,6 +2266,7 @@ fn test_tif() {
 
         assert!(matching_engine_response.num_quote_lots_out > QuoteLots::ZERO);
 
+        // Check that order are still not expired on the boundary
         if order_packet.get_last_valid_slot().is_some() {
             mock_clock.slot += 500;
         } else {
@@ -2180,6 +2324,7 @@ fn test_tif() {
         // Assert that TIF kicked in
         assert_eq!(matching_engine_response.num_quote_lots_out, QuoteLots::ZERO);
 
+        // Verify that the events are released in the expected order
         for (i, event) in event_recorder.iter().enumerate() {
             match i {
                 0 => {
