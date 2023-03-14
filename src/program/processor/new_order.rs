@@ -492,7 +492,7 @@ fn process_multiple_new_orders<'a, 'info>(
             } else {
                 assert_with_msg(
                     quote_lots_to_deposit == QuoteLots::ZERO,
-                    PhoenixError::CancelMultipleOrdersError,
+                    PhoenixError::NewOrderError,
                     "Expected quote_lots_to_deposit to be zero",
                 )?;
             }
@@ -507,7 +507,7 @@ fn process_multiple_new_orders<'a, 'info>(
             } else {
                 assert_with_msg(
                     base_lots_to_deposit == BaseLots::ZERO,
-                    PhoenixError::CancelMultipleOrdersError,
+                    PhoenixError::NewOrderError,
                     "Expected base_lots_to_deposit to be zero",
                 )?;
             }
