@@ -126,6 +126,12 @@ pub enum OrderPacket {
         /// Using only deposited funds will allow the trader to pass in less accounts per instruction and
         /// save transaction space as well as compute. This is only for traders who have a seat
         use_only_deposited_funds: bool,
+
+        /// If this is set, the order will be invalid after the specified slot
+        last_valid_slot: Option<u64>,
+
+        /// If this is set, the order will be invalid after the specified unix timestamp
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     },
 }
 
@@ -312,6 +318,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            None,
+            None,
         )
     }
 
@@ -334,6 +342,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            None,
+            None,
         )
     }
 
@@ -356,6 +366,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            None,
+            None,
         )
     }
 
@@ -378,6 +390,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            None,
+            None,
         )
     }
 
@@ -401,6 +415,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            None,
+            None,
         )
     }
 
@@ -416,6 +432,8 @@ impl OrderPacket {
             None,
             0,
             false,
+            None,
+            None,
         )
     }
 
@@ -431,6 +449,8 @@ impl OrderPacket {
             None,
             0,
             false,
+            None,
+            None,
         )
     }
 
@@ -446,6 +466,8 @@ impl OrderPacket {
         match_limit: Option<u64>,
         client_order_id: u128,
         use_only_deposited_funds: bool,
+        last_valid_slot: Option<u64>,
+        last_valid_unix_timestamp_in_seconds: Option<u64>,
     ) -> Self {
         Self::ImmediateOrCancel {
             side,
@@ -458,6 +480,8 @@ impl OrderPacket {
             match_limit,
             client_order_id,
             use_only_deposited_funds,
+            last_valid_slot,
+            last_valid_unix_timestamp_in_seconds,
         }
     }
 }
@@ -579,7 +603,9 @@ impl OrderPacket {
             Self::Limit {
                 last_valid_slot, ..
             } => *last_valid_slot,
-            Self::ImmediateOrCancel { .. } => None,
+            Self::ImmediateOrCancel {
+                last_valid_slot, ..
+            } => *last_valid_slot,
         }
     }
 
@@ -593,7 +619,10 @@ impl OrderPacket {
                 last_valid_unix_timestamp_in_seconds,
                 ..
             } => *last_valid_unix_timestamp_in_seconds,
-            Self::ImmediateOrCancel { .. } => None,
+            Self::ImmediateOrCancel {
+                last_valid_unix_timestamp_in_seconds,
+                ..
+            } => *last_valid_unix_timestamp_in_seconds,
         }
     }
 
