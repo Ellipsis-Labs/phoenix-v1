@@ -822,7 +822,7 @@ impl<
 
         if order_packet.is_expired(current_slot, current_unix_timestamp) {
             phoenix_log!("Order parameters include a last_valid_slot or last_valid_unix_timestamp_in_seconds in the past, skipping matching and posting");
-            // Do not fail the transaction if the order is expired, but do not modify the order book
+            // Do not fail the transaction if the order is expired, but do not place or match the order
             return Some((None, MatchingEngineResponse::default()));
         }
 
