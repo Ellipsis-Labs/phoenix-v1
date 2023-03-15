@@ -1404,6 +1404,7 @@ fn test_fok_and_ioc_limit_5() {
 
     let mut mock_clock_fn = || (1000, 1000);
 
+    // IOC order should return no matches if TIF constraint is not met
     assert_eq!(
         market
             .place_order(
@@ -1430,6 +1431,7 @@ fn test_fok_and_ioc_limit_5() {
         MatchingEngineResponse::default()
     );
 
+    // IOC order should return no matches if TIF constraint is not met
     assert_eq!(
         market
             .place_order(
@@ -1447,6 +1449,33 @@ fn test_fok_and_ioc_limit_5() {
                     false,
                     None,
                     Some(2),
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
+    );
+
+    // IOC order should match if TIF constraint is set but not met
+    assert_ne!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    Some(1200),
+                    Some(1200),
                 ),
                 &mut record_event_fn,
                 &mut mock_clock_fn,
