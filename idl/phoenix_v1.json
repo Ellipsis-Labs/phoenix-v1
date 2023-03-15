@@ -2432,6 +2432,18 @@
               {
                 "name": "use_only_deposited_funds",
                 "type": "bool"
+              },
+              {
+                "name": "last_valid_slot",
+                "type": {
+                  "option": "u64"
+                }
+              },
+              {
+                "name": "last_valid_unix_timestamp_in_seconds",
+                "type": {
+                  "option": "u64"
+                }
               }
             ]
           }
