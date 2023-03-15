@@ -1,6 +1,6 @@
 use crate::{
     program::{
-        dispatch_market::load_with_dispatch_mut, error::PhoenixError,
+        assert_with_msg, dispatch_market::load_with_dispatch_mut, error::PhoenixError,
         loaders::CancelOrWithdrawContext as Cancel, token_utils::try_withdraw, MarketHeader,
         PhoenixMarketContext, PhoenixVaultContext,
     },
@@ -102,6 +102,19 @@ pub(crate) fn process_reduce_order<'a, 'info>(
             base_vault,
             num_quote_lots_out * header.get_quote_lot_size(),
             num_base_lots_out * header.get_base_lot_size(),
+        )?;
+    } else {
+        // This case is only reached if the user is reducing orders with free funds
+        // In this case, there should be no funds to claim
+        assert_with_msg(
+            num_quote_lots_out == 0,
+            PhoenixError::ReduceOrderError,
+            "WARNING: num_quote_lots_out must be 0",
+        )?;
+        assert_with_msg(
+            num_base_lots_out == 0,
+            PhoenixError::ReduceOrderError,
+            "WARNING: num_base_lots_out must be 0",
         )?;
     }
     Ok(())

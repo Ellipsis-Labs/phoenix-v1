@@ -1402,6 +1402,89 @@ fn test_fok_and_ioc_limit_5() {
         )
         .is_none());
 
+    let mut mock_clock_fn = || (1000, 1000);
+
+    // IOC order should return no matches if TIF constraint is not met
+    assert_eq!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    Some(2),
+                    None
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
+    );
+
+    // IOC order should return no matches if TIF constraint is not met
+    assert_eq!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    None,
+                    Some(2),
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
+    );
+
+    // IOC order should match if TIF constraint is set but not met
+    assert_ne!(
+        market
+            .place_order(
+                &taker,
+                OrderPacket::new_ioc(
+                    Side::Bid,
+                    None,
+                    100,
+                    0,
+                    0,
+                    0,
+                    SelfTradeBehavior::Abort,
+                    None,
+                    rng.gen::<u128>(),
+                    false,
+                    Some(1200),
+                    Some(1200),
+                ),
+                &mut record_event_fn,
+                &mut mock_clock_fn,
+            )
+            .unwrap()
+            .1,
+        MatchingEngineResponse::default()
+    );
+
     assert!(
         market
             .place_order(
@@ -1417,6 +1500,8 @@ fn test_fok_and_ioc_limit_5() {
                     None,
                     rng.gen::<u128>(),
                     false,
+                    None,
+                    None
                 ),
                 &mut record_event_fn,
                 &mut get_clock_fn,
@@ -2215,14 +2300,18 @@ fn test_tif() {
                 timestamp: now.duration_since(UNIX_EPOCH).unwrap().as_secs() + 2000,
             };
             let mut mock_clock_fn = || (expired_mock_clock.slot, expired_mock_clock.timestamp);
-            assert!(market
-                .place_order(
-                    &maker,
-                    order_packet,
-                    &mut record_event_fn,
-                    &mut mock_clock_fn,
-                )
-                .is_none());
+            assert_eq!(
+                market
+                    .place_order(
+                        &maker,
+                        order_packet,
+                        &mut record_event_fn,
+                        &mut mock_clock_fn,
+                    )
+                    .unwrap()
+                    .1,
+                MatchingEngineResponse::default()
+            );
         }
 
         {

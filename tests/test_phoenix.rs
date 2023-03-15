@@ -2318,6 +2318,17 @@ async fn test_phoenix_place_multiple_limit_orders() {
         &multiple_order_packet,
     );
 
+    {
+        let mut adversarial_ix = new_order_ix.clone();
+        adversarial_ix.accounts = adversarial_ix.accounts[..5].to_vec();
+
+        assert!(sdk
+            .client
+            .sign_send_instructions(vec![adversarial_ix], vec![&default_maker.user])
+            .await
+            .is_err());
+    }
+
     sdk.client
         .sign_send_instructions(vec![new_order_ix], vec![&default_maker.user])
         .await
