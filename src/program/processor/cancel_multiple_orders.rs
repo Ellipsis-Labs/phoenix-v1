@@ -96,12 +96,12 @@ pub(crate) fn process_cancel_all_orders<'a, 'info>(
         assert_with_msg(
             num_quote_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_quote_lots_out must be 0",
+            "WARNING: num_quote_lots_out must be 0",
         )?;
         assert_with_msg(
             num_base_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_base_lots_out must be 0",
+            "WARNING: num_base_lots_out must be 0",
         )?;
     }
 
@@ -233,12 +233,12 @@ pub(crate) fn process_cancel_multiple_orders_by_id<'a, 'info>(
         assert_with_msg(
             num_quote_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_quote_lots_out must be 0",
+            "WARNING: num_quote_lots_out must be 0",
         )?;
         assert_with_msg(
             num_base_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_base_lots_out must be 0",
+            "WARNING: num_base_lots_out must be 0",
         )?;
     }
 
@@ -312,12 +312,12 @@ pub(crate) fn process_cancel_orders<'a, 'info>(
         assert_with_msg(
             num_quote_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_quote_lots_out must be 0",
+            "WARNING: num_quote_lots_out must be 0",
         )?;
         assert_with_msg(
             num_base_lots_out == 0,
             PhoenixError::CancelMultipleOrdersError,
-            "num_base_lots_out must be 0",
+            "WARNING: num_base_lots_out must be 0",
         )?;
     }
 

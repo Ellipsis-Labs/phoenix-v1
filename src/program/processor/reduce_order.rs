@@ -109,12 +109,12 @@ pub(crate) fn process_reduce_order<'a, 'info>(
         assert_with_msg(
             num_quote_lots_out == 0,
             PhoenixError::ReduceOrderError,
-            "num_quote_lots_out must be 0",
+            "WARNING: num_quote_lots_out must be 0",
         )?;
         assert_with_msg(
             num_base_lots_out == 0,
             PhoenixError::ReduceOrderError,
-            "num_base_lots_out must be 0",
+            "WARNING: num_base_lots_out must be 0",
         )?;
     }
     Ok(())

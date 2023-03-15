@@ -822,7 +822,7 @@ impl<
 
         if order_packet.is_expired(current_slot, current_unix_timestamp) {
             phoenix_log!("Order parameters include a last_valid_slot or last_valid_unix_timestamp_in_seconds in the past, skipping matching and posting");
-            // Fail softly if the order is expired
+            // Do not fail the transaction if the order is expired, but do not modify the order book
             return Some((None, MatchingEngineResponse::default()));
         }
 
@@ -1539,10 +1539,15 @@ impl<
                     if order.trader_index != trader_index as u64 {
                         return None;
                     }
-                    (
-                        base_lots_to_remove == order.num_base_lots,
-                        base_lots_to_remove,
-                    )
+                    // If the order is tagged as expired, we remove it from the book regardless of the size.
+                    if order_is_expired {
+                        (true, order.num_base_lots)
+                    } else {
+                        (
+                            base_lots_to_remove == order.num_base_lots,
+                            base_lots_to_remove,
+                        )
+                    }
                 } else {
                     return Some(MatchingEngineResponse::default());
                 }
