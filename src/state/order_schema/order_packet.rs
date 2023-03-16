@@ -669,7 +669,8 @@ pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
 #[test]
 fn test_decode_order_packet() {
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    use rand::{rngs::StdRng, SeedableRng};
+    let mut rng = StdRng::seed_from_u64(42);
 
     let num_iters = 10000;
 
