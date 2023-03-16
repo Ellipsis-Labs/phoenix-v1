@@ -642,3 +642,63 @@ impl OrderPacket {
         false
     }
 }
+
+pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
+    let order_packet = match OrderPacket::try_from_slice(bytes) {
+        Ok(order_packet) => order_packet,
+        Err(_) => {
+            // Options with a None value are encoded with a 0 byte.
+            // If the input data is missing the `last_valid_slot` and `last_valid_unix_timestamp_in_seconds`
+            // fields on the order packet, this function infers these parameters to be None and tries
+            // to decode the order packet again.
+            let padded_bytes = [bytes, &[0_u8, 0_u8]].concat();
+            let order_packet = OrderPacket::try_from_slice(&padded_bytes).ok()?;
+            if order_packet.get_last_valid_slot().is_some()
+                || order_packet
+                    .get_last_valid_unix_timestamp_in_seconds()
+                    .is_some()
+            {
+                return None;
+            }
+            order_packet
+        }
+    };
+    Some(order_packet)
+}
+
+#[test]
+fn test_decode_order_packet() {
+    let post_only_op = OrderPacket::new_post_only_default(Side::Ask, 10000, 10);
+    let bytes = post_only_op.try_to_vec().unwrap();
+    let decoded_normal = decode_order_packet(&bytes).unwrap();
+    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+    assert_eq!(post_only_op, decoded_normal);
+    assert_eq!(decoded_normal, decoded_inferred);
+
+    let limit_op = OrderPacket::new_limit_order_default(Side::Ask, 10000, 10);
+    let bytes = limit_op.try_to_vec().unwrap();
+    let decoded_normal = decode_order_packet(&bytes).unwrap();
+    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+    assert_eq!(limit_op, decoded_normal);
+    assert_eq!(decoded_normal, decoded_inferred);
+
+    let ioc_op = OrderPacket::new_ioc(
+        Side::Ask,
+        Some(10000),
+        10,
+        0,
+        0,
+        0,
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+        None,
+        None,
+    );
+    let bytes = ioc_op.try_to_vec().unwrap();
+    let decoded_normal = decode_order_packet(&bytes).unwrap();
+    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+    assert_eq!(ioc_op, decoded_normal);
+    assert_eq!(decoded_normal, decoded_inferred);
+}

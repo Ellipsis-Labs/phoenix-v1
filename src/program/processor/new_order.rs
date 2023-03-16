@@ -8,7 +8,7 @@ use crate::{
         MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
     quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, Ticks, WrapperU64},
-    state::{markets::MarketEvent, OrderPacket, OrderPacketMetadata, Side},
+    state::{decode_order_packet, markets::MarketEvent, OrderPacket, OrderPacketMetadata, Side},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use itertools::Itertools;
@@ -82,7 +82,10 @@ pub(crate) fn process_swap<'a, 'info>(
 ) -> ProgramResult {
     sol_log_compute_units();
     let new_order_context = NewOrderContext::load_cross_only(market_context, accounts, false)?;
-    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    let mut order_packet = decode_order_packet(data).ok_or_else(|| {
+        phoenix_log!("Failed to decode order packet");
+        ProgramError::InvalidInstructionData
+    })?;
     assert_with_msg(
         new_order_context.seat_option.is_none(),
         ProgramError::InvalidInstructionData,
@@ -118,7 +121,10 @@ pub(crate) fn process_swap_with_free_funds<'a, 'info>(
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_cross_only(market_context, accounts, true)?;
-    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    let mut order_packet = decode_order_packet(data).ok_or_else(|| {
+        phoenix_log!("Failed to decode order packet");
+        ProgramError::InvalidInstructionData
+    })?;
     assert_with_msg(
         new_order_context.seat_option.is_some(),
         ProgramError::InvalidInstructionData,
@@ -152,7 +158,10 @@ pub(crate) fn process_place_limit_order<'a, 'info>(
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, false)?;
-    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    let mut order_packet = decode_order_packet(data).ok_or_else(|| {
+        phoenix_log!("Failed to decode order packet");
+        ProgramError::InvalidInstructionData
+    })?;
     assert_with_msg(
         new_order_context.seat_option.is_some(),
         ProgramError::InvalidInstructionData,
@@ -188,7 +197,10 @@ pub(crate) fn process_place_limit_order_with_free_funds<'a, 'info>(
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, true)?;
-    let mut order_packet = OrderPacket::try_from_slice(data)?;
+    let mut order_packet = decode_order_packet(data).ok_or_else(|| {
+        phoenix_log!("Failed to decode order packet");
+        ProgramError::InvalidInstructionData
+    })?;
     assert_with_msg(
         new_order_context.seat_option.is_some(),
         ProgramError::InvalidInstructionData,
