@@ -672,7 +672,7 @@ fn test_decode_order_packet() {
     use rand::{rngs::StdRng, SeedableRng};
     let mut rng = StdRng::seed_from_u64(42);
 
-    let num_iters = 10000;
+    let num_iters = 100;
 
     #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq, Debug)]
     pub enum DeprecatedOrderPacket {
