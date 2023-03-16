@@ -668,37 +668,198 @@ pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
 
 #[test]
 fn test_decode_order_packet() {
-    let post_only_op = OrderPacket::new_post_only_default(Side::Ask, 10000, 10);
-    let bytes = post_only_op.try_to_vec().unwrap();
-    let decoded_normal = decode_order_packet(&bytes).unwrap();
-    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
-    assert_eq!(post_only_op, decoded_normal);
-    assert_eq!(decoded_normal, decoded_inferred);
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
 
-    let limit_op = OrderPacket::new_limit_order_default(Side::Ask, 10000, 10);
-    let bytes = limit_op.try_to_vec().unwrap();
-    let decoded_normal = decode_order_packet(&bytes).unwrap();
-    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
-    assert_eq!(limit_op, decoded_normal);
-    assert_eq!(decoded_normal, decoded_inferred);
+    let num_iters = 10000;
 
-    let ioc_op = OrderPacket::new_ioc(
-        Side::Ask,
-        Some(10000),
-        10,
-        0,
-        0,
-        0,
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-        None,
-        None,
-    );
-    let bytes = ioc_op.try_to_vec().unwrap();
-    let decoded_normal = decode_order_packet(&bytes).unwrap();
-    let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
-    assert_eq!(ioc_op, decoded_normal);
-    assert_eq!(decoded_normal, decoded_inferred);
+    #[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Eq, Debug)]
+    pub enum DeprecatedOrderPacket {
+        PostOnly {
+            side: Side,
+            price_in_ticks: Ticks,
+            num_base_lots: BaseLots,
+            client_order_id: u128,
+            reject_post_only: bool,
+            use_only_deposited_funds: bool,
+        },
+        Limit {
+            side: Side,
+            price_in_ticks: Ticks,
+            num_base_lots: BaseLots,
+            self_trade_behavior: SelfTradeBehavior,
+            match_limit: Option<u64>,
+            client_order_id: u128,
+            use_only_deposited_funds: bool,
+        },
+
+        ImmediateOrCancel {
+            side: Side,
+            price_in_ticks: Option<Ticks>,
+            num_base_lots: BaseLots,
+            num_quote_lots: QuoteLots,
+            min_base_lots_to_fill: BaseLots,
+            min_quote_lots_to_fill: QuoteLots,
+            self_trade_behavior: SelfTradeBehavior,
+            match_limit: Option<u64>,
+            client_order_id: u128,
+            use_only_deposited_funds: bool,
+        },
+    }
+    for _ in 0..num_iters {
+        let side = if rng.gen::<f64>() > 0.5 {
+            Side::Bid
+        } else {
+            Side::Ask
+        };
+
+        let price_in_ticks = Ticks::new(rng.gen::<u64>());
+        let num_base_lots = BaseLots::new(rng.gen::<u64>());
+        let client_order_id = rng.gen::<u128>();
+        let reject_post_only = rng.gen::<bool>();
+        let use_only_deposited_funds = rng.gen::<bool>();
+        let packet = OrderPacket::PostOnly {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            client_order_id,
+            reject_post_only,
+            use_only_deposited_funds,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        };
+        let deprecated_packet = DeprecatedOrderPacket::PostOnly {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            client_order_id,
+            reject_post_only,
+            use_only_deposited_funds,
+        };
+        let bytes = packet.try_to_vec().unwrap();
+        let decoded_normal = decode_order_packet(&bytes).unwrap();
+        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
+        let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
+        assert_eq!(packet, decoded_normal);
+        assert_eq!(decoded_normal, decoded_inferred);
+        assert_eq!(decoded_inferred, decoded_deprecated);
+    }
+
+    for _ in 0..num_iters {
+        let side = if rng.gen::<f64>() > 0.5 {
+            Side::Bid
+        } else {
+            Side::Ask
+        };
+
+        let price_in_ticks = Ticks::new(rng.gen::<u64>());
+        let num_base_lots = BaseLots::new(rng.gen::<u64>());
+        let client_order_id = rng.gen::<u128>();
+        let self_trade_behavior = match rng.gen_range(0, 3) {
+            0 => SelfTradeBehavior::DecrementTake,
+            1 => SelfTradeBehavior::CancelProvide,
+            2 => SelfTradeBehavior::Abort,
+            _ => unreachable!(),
+        };
+        let match_limit = if rng.gen::<f64>() > 0.5 {
+            Some(rng.gen::<u64>())
+        } else {
+            None
+        };
+        let use_only_deposited_funds = rng.gen::<bool>();
+        let packet = OrderPacket::Limit {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            client_order_id,
+            self_trade_behavior,
+            match_limit,
+            use_only_deposited_funds,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        };
+        let deprecated_packet = DeprecatedOrderPacket::Limit {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            client_order_id,
+            self_trade_behavior,
+            match_limit,
+            use_only_deposited_funds,
+        };
+        let bytes = packet.try_to_vec().unwrap();
+        let decoded_normal = decode_order_packet(&bytes).unwrap();
+        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
+        let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
+        assert_eq!(packet, decoded_normal);
+        assert_eq!(decoded_normal, decoded_inferred);
+        assert_eq!(decoded_inferred, decoded_deprecated);
+    }
+
+    for _ in 0..num_iters {
+        let side = if rng.gen::<f64>() > 0.5 {
+            Side::Bid
+        } else {
+            Side::Ask
+        };
+
+        let price_in_ticks = if rng.gen::<f64>() > 0.5 {
+            Some(Ticks::new(rng.gen::<u64>()))
+        } else {
+            None
+        };
+        let num_base_lots = BaseLots::new(rng.gen::<u64>());
+        let min_base_lots_to_fill = BaseLots::new(rng.gen::<u64>());
+        let num_quote_lots = QuoteLots::new(rng.gen::<u64>());
+        let min_quote_lots_to_fill = QuoteLots::new(rng.gen::<u64>());
+        let client_order_id = rng.gen::<u128>();
+        let self_trade_behavior = match rng.gen_range(0, 3) {
+            0 => SelfTradeBehavior::DecrementTake,
+            1 => SelfTradeBehavior::CancelProvide,
+            2 => SelfTradeBehavior::Abort,
+            _ => unreachable!(),
+        };
+        let match_limit = if rng.gen::<f64>() > 0.5 {
+            Some(rng.gen::<u64>())
+        } else {
+            None
+        };
+        let use_only_deposited_funds = rng.gen::<bool>();
+        let packet = OrderPacket::ImmediateOrCancel {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            num_quote_lots,
+            min_base_lots_to_fill,
+            min_quote_lots_to_fill,
+            client_order_id,
+            self_trade_behavior,
+            match_limit,
+            use_only_deposited_funds,
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        };
+        let deprecated_packet = DeprecatedOrderPacket::ImmediateOrCancel {
+            side,
+            price_in_ticks,
+            num_base_lots,
+            num_quote_lots,
+            min_base_lots_to_fill,
+            min_quote_lots_to_fill,
+            client_order_id,
+            self_trade_behavior,
+            match_limit,
+            use_only_deposited_funds,
+        };
+        let bytes = packet.try_to_vec().unwrap();
+        let decoded_normal = decode_order_packet(&bytes).unwrap();
+        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
+        let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
+        assert_eq!(packet, decoded_normal);
+        assert_eq!(decoded_normal, decoded_inferred);
+        assert_eq!(decoded_inferred, decoded_deprecated);
+    }
 }
