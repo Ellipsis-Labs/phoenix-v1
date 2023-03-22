@@ -79,7 +79,7 @@ pub(crate) fn dispatch_market_mut<'a>(
         assert_with_msg(
             market.get_sequence_number() > 0,
             PhoenixError::MarketUninitialized,
-            "Market is not inialized",
+            "Market is not initialized",
         )?;
     }
     Ok(MarketWrapperMut::<
