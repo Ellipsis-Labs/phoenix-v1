@@ -2504,5 +2504,5 @@ fn test_limit_order_crossing() {
         .is_some());
 
     let ladder = market.get_ladder(5);
-    println!("Ladder: {:#?}", ladder);
+    assert!(ladder.asks.is_empty());
 }
