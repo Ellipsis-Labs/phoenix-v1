@@ -826,134 +826,146 @@ impl<
             return Some((None, MatchingEngineResponse::default()));
         }
 
-        let (resting_order, mut matching_engine_response) = if let OrderPacket::PostOnly {
-            price_in_ticks,
-            reject_post_only,
-            ..
-        } = &mut order_packet
-        {
-            // Handle cases where PostOnly order would cross the book
-            if let Some(ticks) = self.check_for_cross(
-                side,
-                *price_in_ticks,
-                current_slot,
-                current_unix_timestamp,
-                record_event_fn,
-            ) {
-                if *reject_post_only {
-                    phoenix_log!("PostOnly order crosses the book - order rejected");
-                    return None;
-                } else {
-                    match side {
-                        Side::Bid => {
-                            if ticks <= Ticks::ONE {
-                                phoenix_log!("PostOnly order crosses the book and can not be amended to a valid price - order rejected");
-                                return None;
-                            }
-                            *price_in_ticks = ticks - Ticks::ONE;
-                        }
-                        Side::Ask => {
-                            *price_in_ticks = ticks + Ticks::ONE;
-                        }
-                    }
-                    phoenix_log!("PostOnly order crosses the book - order amended");
-                }
-            }
-
-            (
-                FIFORestingOrder::new(
-                    trader_index as u64,
-                    order_packet.num_base_lots(),
-                    order_packet.get_last_valid_slot(),
-                    order_packet.get_last_valid_unix_timestamp_in_seconds(),
-                ),
-                MatchingEngineResponse::default(),
-            )
-        } else {
-            let base_lot_budget = order_packet.base_lot_budget();
-            // Multiply the quote lot budget by the number of base lots per unit to get the number of
-            // adjusted quote lots (quote_lots * base_lots_per_base_unit)
-            let quote_lot_budget = order_packet.quote_lot_budget();
-            let adjusted_quote_lot_budget = match side {
-                // For buys, the adjusted quote lot budget is decreased by the max fee.
-                // This is because the fee is added to the quote lots spent after the matching is complete.
-                Side::Bid => quote_lot_budget.and_then(|quote_lot_budget| {
-                    self.adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
-                        quote_lot_budget * self.base_lots_per_base_unit,
-                    )
-                }),
-                // For sells, the adjusted quote lot budget is increased by the max fee.
-                // This is because the fee is subtracted from the quote lot received after the matching is complete.
-                Side::Ask => quote_lot_budget.and_then(|quote_lot_budget| {
-                    self.adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
-                        quote_lot_budget * self.base_lots_per_base_unit,
-                    )
-                }),
-            }
-            .unwrap_or_else(|| AdjustedQuoteLots::new(u64::MAX));
-
-            let mut inflight_order = InflightOrder::new(
-                side,
-                order_packet.self_trade_behavior(),
-                order_packet.get_price_in_ticks(),
-                order_packet.match_limit(),
-                base_lot_budget,
-                adjusted_quote_lot_budget,
-                order_packet.get_last_valid_slot(),
-                order_packet.get_last_valid_unix_timestamp_in_seconds(),
-            );
-            let resting_order = self
-                .match_order(
-                    &mut inflight_order,
-                    trader_index,
-                    record_event_fn,
+        let (limit_order_crosses, resting_order, mut matching_engine_response) =
+            if let OrderPacket::PostOnly {
+                price_in_ticks,
+                reject_post_only,
+                ..
+            } = &mut order_packet
+            {
+                // Handle cases where PostOnly order would cross the book
+                if let Some(ticks) = self.check_for_cross(
+                    side,
+                    *price_in_ticks,
                     current_slot,
                     current_unix_timestamp,
+                    record_event_fn,
+                ) {
+                    if *reject_post_only {
+                        phoenix_log!("PostOnly order crosses the book - order rejected");
+                        return None;
+                    } else {
+                        match side {
+                            Side::Bid => {
+                                if ticks <= Ticks::ONE {
+                                    phoenix_log!("PostOnly order crosses the book and can not be amended to a valid price - order rejected");
+                                    return None;
+                                }
+                                *price_in_ticks = ticks - Ticks::ONE;
+                            }
+                            Side::Ask => {
+                                *price_in_ticks = ticks + Ticks::ONE;
+                            }
+                        }
+                        phoenix_log!("PostOnly order crosses the book - order amended");
+                    }
+                }
+
+                (
+                    false,
+                    FIFORestingOrder::new(
+                        trader_index as u64,
+                        order_packet.num_base_lots(),
+                        order_packet.get_last_valid_slot(),
+                        order_packet.get_last_valid_unix_timestamp_in_seconds(),
+                    ),
+                    MatchingEngineResponse::default(),
                 )
-                .map_or_else(
-                    || {
-                        phoenix_log!("Encountered error matching order");
-                        None
-                    },
-                    Some,
-                )?;
-            // matched_adjusted_quote_lots is rounded down to the nearest tick for buys and up for
-            // sells to yield a whole number of matched_quote_lots.
-            let matched_quote_lots = match side {
-                // We add the quote_lot_fees to account for the fee being paid on a buy order
-                Side::Bid => {
-                    (self.round_adjusted_quote_lots_up(inflight_order.matched_adjusted_quote_lots)
-                        / self.base_lots_per_base_unit)
-                        + inflight_order.quote_lot_fees
+            } else {
+                let base_lot_budget = order_packet.base_lot_budget();
+                // Multiply the quote lot budget by the number of base lots per unit to get the number of
+                // adjusted quote lots (quote_lots * base_lots_per_base_unit)
+                let quote_lot_budget = order_packet.quote_lot_budget();
+                let adjusted_quote_lot_budget = match side {
+                    // For buys, the adjusted quote lot budget is decreased by the max fee.
+                    // This is because the fee is added to the quote lots spent after the matching is complete.
+                    Side::Bid => quote_lot_budget.and_then(|quote_lot_budget| {
+                        self.adjusted_quote_lot_budget_post_fee_adjustment_for_buys(
+                            quote_lot_budget * self.base_lots_per_base_unit,
+                        )
+                    }),
+                    // For sells, the adjusted quote lot budget is increased by the max fee.
+                    // This is because the fee is subtracted from the quote lot received after the matching is complete.
+                    Side::Ask => quote_lot_budget.and_then(|quote_lot_budget| {
+                        self.adjusted_quote_lot_budget_post_fee_adjustment_for_sells(
+                            quote_lot_budget * self.base_lots_per_base_unit,
+                        )
+                    }),
                 }
-                // We subtract the quote_lot_fees to account for the fee being paid on a sell order
-                Side::Ask => {
-                    (self
-                        .round_adjusted_quote_lots_down(inflight_order.matched_adjusted_quote_lots)
-                        / self.base_lots_per_base_unit)
-                        - inflight_order.quote_lot_fees
-                }
-            };
-            let matching_engine_response = match side {
-                Side::Bid => MatchingEngineResponse::new_from_buy(
-                    matched_quote_lots,
-                    inflight_order.matched_base_lots,
-                ),
-                Side::Ask => MatchingEngineResponse::new_from_sell(
-                    inflight_order.matched_base_lots,
-                    matched_quote_lots,
-                ),
-            };
+                .unwrap_or_else(|| AdjustedQuoteLots::new(u64::MAX));
 
-            record_event_fn(MarketEvent::FillSummary {
-                client_order_id: order_packet.client_order_id(),
-                total_base_lots_filled: inflight_order.matched_base_lots,
-                total_quote_lots_filled: matched_quote_lots,
-                total_fee_in_quote_lots: inflight_order.quote_lot_fees,
-            });
+                let mut inflight_order = InflightOrder::new(
+                    side,
+                    order_packet.self_trade_behavior(),
+                    order_packet.get_price_in_ticks(),
+                    order_packet.match_limit(),
+                    base_lot_budget,
+                    adjusted_quote_lot_budget,
+                    order_packet.get_last_valid_slot(),
+                    order_packet.get_last_valid_unix_timestamp_in_seconds(),
+                );
+                let (best_price_on_opposite_book, resting_order) = self
+                    .match_order(
+                        &mut inflight_order,
+                        trader_index,
+                        record_event_fn,
+                        current_slot,
+                        current_unix_timestamp,
+                    )
+                    .map_or_else(
+                        || {
+                            phoenix_log!("Encountered error matching order");
+                            None
+                        },
+                        Some,
+                    )?;
+                // matched_adjusted_quote_lots is rounded down to the nearest tick for buys and up for
+                // sells to yield a whole number of matched_quote_lots.
+                let matched_quote_lots = match side {
+                    // We add the quote_lot_fees to account for the fee being paid on a buy order
+                    Side::Bid => {
+                        (self.round_adjusted_quote_lots_up(
+                            inflight_order.matched_adjusted_quote_lots,
+                        ) / self.base_lots_per_base_unit)
+                            + inflight_order.quote_lot_fees
+                    }
+                    // We subtract the quote_lot_fees to account for the fee being paid on a sell order
+                    Side::Ask => {
+                        (self.round_adjusted_quote_lots_down(
+                            inflight_order.matched_adjusted_quote_lots,
+                        ) / self.base_lots_per_base_unit)
+                            - inflight_order.quote_lot_fees
+                    }
+                };
+                let matching_engine_response = match side {
+                    Side::Bid => MatchingEngineResponse::new_from_buy(
+                        matched_quote_lots,
+                        inflight_order.matched_base_lots,
+                    ),
+                    Side::Ask => MatchingEngineResponse::new_from_sell(
+                        inflight_order.matched_base_lots,
+                        matched_quote_lots,
+                    ),
+                };
 
-            (resting_order, matching_engine_response)
-        };
+                record_event_fn(MarketEvent::FillSummary {
+                    client_order_id: order_packet.client_order_id(),
+                    total_base_lots_filled: inflight_order.matched_base_lots,
+                    total_quote_lots_filled: matched_quote_lots,
+                    total_fee_in_quote_lots: inflight_order.quote_lot_fees,
+                });
+
+                let limit_order_crosses_book = match side {
+                    Side::Bid => order_packet.get_price_in_ticks() >= best_price_on_opposite_book,
+                    Side::Ask => order_packet.get_price_in_ticks() <= best_price_on_opposite_book,
+                };
+
+                (
+                    limit_order_crosses_book,
+                    resting_order,
+                    matching_engine_response,
+                )
+            };
 
         let mut placed_order_id = None;
 
@@ -994,8 +1006,8 @@ impl<
                 ),
             };
 
-            // Only place an order if there is more size to place
-            if resting_order.num_base_lots > BaseLots::ZERO {
+            // Only place an order if there is more size to place and the limit order doesn't cross the book
+            if resting_order.num_base_lots > BaseLots::ZERO && !limit_order_crosses {
                 // Evict order from the book if it is at capacity
                 placed_order_id = Some(order_id);
                 if book_full {
@@ -1169,7 +1181,7 @@ impl<
         record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
         current_slot: u64,
         current_unix_timestamp: u64,
-    ) -> Option<FIFORestingOrder> {
+    ) -> Option<(Ticks, FIFORestingOrder)> {
         let mut total_matched_adjusted_quote_lots = AdjustedQuoteLots::ZERO;
         while inflight_order.in_progress() {
             // Find the first order on the opposite side of the book that matches the inflight order.
@@ -1400,11 +1412,23 @@ impl<
             / self.base_lots_per_base_unit;
         self.unclaimed_quote_lot_fees += inflight_order.quote_lot_fees;
 
-        Some(FIFORestingOrder::new(
-            current_trader_index as u64,
-            inflight_order.base_lot_budget,
-            inflight_order.last_valid_slot,
-            inflight_order.last_valid_unix_timestamp_in_seconds,
+        let best_price_on_opposite_book = self
+            .get_book_mut(inflight_order.side.opposite())
+            .get_min()
+            .map(|(o_id, _)| o_id.price_in_ticks)
+            .unwrap_or_else(|| match inflight_order.side {
+                Side::Bid => Ticks::MAX,
+                Side::Ask => Ticks::ZERO,
+            });
+
+        Some((
+            best_price_on_opposite_book,
+            FIFORestingOrder::new(
+                current_trader_index as u64,
+                inflight_order.base_lot_budget,
+                inflight_order.last_valid_slot,
+                inflight_order.last_valid_unix_timestamp_in_seconds,
+            ),
         ))
     }
 
