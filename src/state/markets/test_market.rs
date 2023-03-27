@@ -2454,3 +2454,55 @@ fn test_tif() {
         }
     }
 }
+
+#[test]
+fn test_limit_order_crossing() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut market = setup_market();
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader_1 = rng.gen::<u128>();
+    let trader_2 = rng.gen::<u128>();
+
+    // Place 2 bids for 100 and 95, then fill them both
+    assert!(market
+        .place_order(
+            &trader_1,
+            OrderPacket::new_limit_order_default(Side::Bid, 100, 10),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    assert!(market
+        .place_order(
+            &trader_1,
+            OrderPacket::new_limit_order_default(Side::Bid, 100, 10),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    assert!(market
+        .place_order(
+            &trader_2,
+            OrderPacket::Limit {
+                side: Side::Ask,
+                price_in_ticks: Ticks::new(95),
+                num_base_lots: BaseLots::new(20),
+                match_limit: Some(1), // Note: the behavior of this the parameter is being tested
+                self_trade_behavior: SelfTradeBehavior::Abort,
+                client_order_id: rng.gen::<u128>(),
+                use_only_deposited_funds: false,
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None
+            },
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    let ladder = market.get_ladder(5);
+    assert!(ladder.asks.is_empty());
+}

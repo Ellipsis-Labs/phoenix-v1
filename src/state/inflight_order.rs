@@ -39,6 +39,7 @@ pub(crate) struct InflightOrder {
 }
 
 impl InflightOrder {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         side: Side,
         self_trade_behavior: SelfTradeBehavior,

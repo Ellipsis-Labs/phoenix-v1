@@ -112,8 +112,8 @@ pub trait Market<
         last_valid_slot: Option<u64>,
         last_valid_unix_timestamp_in_seconds: Option<u64>,
     ) -> TypedLadder {
-        let slot_expiration = last_valid_slot.unwrap_or_else(|| 0);
-        let unix_timestamp_expiration = last_valid_unix_timestamp_in_seconds.unwrap_or_else(|| 0);
+        let slot_expiration = last_valid_slot.unwrap_or(0);
+        let unix_timestamp_expiration = last_valid_unix_timestamp_in_seconds.unwrap_or(0);
         let mut bids = vec![];
         let mut asks = vec![];
         for (side, book) in [(Side::Bid, &mut bids), (Side::Ask, &mut asks)].iter_mut() {

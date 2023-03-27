@@ -994,8 +994,31 @@ impl<
                 ),
             };
 
-            // Only place an order if there is more size to place
-            if resting_order.num_base_lots > BaseLots::ZERO {
+            let limit_order_crosses = if matches!(order_packet, OrderPacket::PostOnly { .. }) {
+                // This check has already been performed for PostOnly orders
+                false
+            } else {
+                // Finds the most competitive valid resting order on the opposite book
+                let best_price_on_opposite_book = self
+                    .get_book(side.opposite())
+                    .iter()
+                    .find(|(_, resting_order)| {
+                        !resting_order.is_expired(current_slot, current_unix_timestamp)
+                            && resting_order.num_base_lots > BaseLots::ZERO
+                    })
+                    .map(|(o_id, _)| o_id.price_in_ticks)
+                    .unwrap_or_else(|| match side {
+                        Side::Bid => Ticks::MAX,
+                        Side::Ask => Ticks::ZERO,
+                    });
+                match side {
+                    Side::Bid => order_packet.get_price_in_ticks() >= best_price_on_opposite_book,
+                    Side::Ask => order_packet.get_price_in_ticks() <= best_price_on_opposite_book,
+                }
+            };
+
+            // Only place an order if there is more size to place and the limit order doesn't cross the book
+            if resting_order.num_base_lots > BaseLots::ZERO && !limit_order_crosses {
                 // Evict order from the book if it is at capacity
                 placed_order_id = Some(order_id);
                 if book_full {
@@ -1517,6 +1540,7 @@ impl<
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn reduce_order_inner(
         &mut self,
