@@ -2491,7 +2491,7 @@ fn test_limit_order_crossing() {
                 side: Side::Ask,
                 price_in_ticks: Ticks::new(95),
                 num_base_lots: BaseLots::new(20),
-                match_limit: Some(1),
+                match_limit: Some(1), // Note: the behavior of this the parameter is being tested
                 self_trade_behavior: SelfTradeBehavior::Abort,
                 client_order_id: rng.gen::<u128>(),
                 use_only_deposited_funds: false,

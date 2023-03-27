@@ -1415,11 +1415,10 @@ impl<
         let best_price_on_opposite_book = self
             .get_book(inflight_order.side.opposite())
             .iter()
-            .filter(|(_, resting_order)| {
+            .find(|(_, resting_order)| {
                 !resting_order.is_expired(current_slot, current_unix_timestamp)
                     && resting_order.num_base_lots > BaseLots::ZERO
             })
-            .next()
             .map(|(o_id, _)| o_id.price_in_ticks)
             .unwrap_or_else(|| match inflight_order.side {
                 Side::Bid => Ticks::MAX,
@@ -1546,6 +1545,7 @@ impl<
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn reduce_order_inner(
         &mut self,
