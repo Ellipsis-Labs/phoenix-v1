@@ -224,10 +224,16 @@ impl<'a, 'info> SeatAccountInfo<'a, 'info> {
 
     pub(crate) fn new(
         info: &'a AccountInfo<'info>,
+        market: &Pubkey,
     ) -> Result<SeatAccountInfo<'a, 'info>, ProgramError> {
         let seat_bytes = info.try_borrow_data()?;
         let seat = Seat::load_bytes(&seat_bytes).ok_or(ProgramError::InvalidAccountData)?;
-        let (seat_address, _) = get_seat_address(&seat.market, &seat.trader);
+        let (seat_address, _) = get_seat_address(market, &seat.trader);
+        assert_with_msg(
+            seat.market == *market,
+            ProgramError::InvalidAccountData,
+            "Market on seat does not match market in instruction",
+        )?;
         assert_with_msg(
             info.owner == &crate::ID,
             ProgramError::IllegalOwner,

@@ -323,6 +323,66 @@ async fn test_phoenix_request_seats() {
         .await
         .unwrap();
 
+    let attacker = Keypair::new();
+    airdrop(&sdk.client, &attacker.pubkey(), sol(20.0))
+        .await
+        .unwrap();
+
+    let new_market = Keypair::new();
+
+    let mut init_instructions = vec![];
+    init_instructions.extend_from_slice(
+        &create_initialize_market_instructions_default(
+            &new_market.pubkey(),
+            &meta.base_mint,
+            &meta.quote_mint,
+            &attacker.pubkey(),
+            MarketSizeParams {
+                bids_size: 512,
+                asks_size: 512,
+                num_seats: 128,
+            },
+            1_000_000,
+            1000,
+            1000,
+            0,
+            None,
+        )
+        .unwrap(),
+    );
+
+    sdk.client
+        .sign_send_instructions_with_payer(init_instructions, vec![&attacker, &new_market])
+        .await
+        .unwrap();
+
+    // Request seat for attacker
+    sdk.client
+        .sign_send_instructions(
+            vec![create_request_seat_instruction(&attacker.pubkey(), market)],
+            vec![&attacker],
+        )
+        .await
+        .unwrap();
+
+    let mut malicious_claim_seat_instruction = create_change_seat_status_instruction(
+        &attacker.pubkey(),
+        &new_market.pubkey(),
+        &attacker.pubkey(),
+        SeatApprovalStatus::Approved,
+    );
+
+    malicious_claim_seat_instruction.accounts[4].pubkey =
+        get_seat_address(&market, &attacker.pubkey()).0;
+
+    assert!(
+        sdk.client
+            .sign_send_instructions(vec![malicious_claim_seat_instruction], vec![&attacker])
+            .await
+            .is_err(),
+        "Attacker cannot claim seat for another market"
+    );
+
     // Request seat for maker
     sdk.client
         .sign_send_instructions(
