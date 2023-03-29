@@ -435,7 +435,7 @@ impl<'a, 'info> ModifySeatContext<'a, 'info> {
 
         let account_iter = &mut accounts.iter();
         let ctx = Self {
-            seat: SeatAccountInfo::new(next_account_info(account_iter)?)?,
+            seat: SeatAccountInfo::new(next_account_info(account_iter)?, market_info.key)?,
         };
         Ok(ctx)
     }
