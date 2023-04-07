@@ -395,7 +395,7 @@ impl OrderPacket {
         )
     }
 
-    pub fn new_ioc_by_lots(
+    pub fn new_ioc_by_base_lots(
         side: Side,
         price_in_ticks: u64,
         base_lot_budget: u64,
@@ -417,6 +417,29 @@ impl OrderPacket {
             use_only_deposited_funds,
             None,
             None,
+        )
+    }
+
+    pub fn new_ioc_by_quote_lots(
+        side: Side,
+        price_in_ticks: u64,
+        quote_lot_budget: u64,
+        self_trade_behavior: SelfTradeBehavior,
+        match_limit: Option<u64>,
+        client_order_id: u128,
+        use_only_deposited_funds: bool,
+    ) -> Self {
+        Self::new_ioc(
+            side,
+            Some(price_in_ticks),
+            0,
+            quote_lot_budget,
+            0,
+            0,
+            self_trade_behavior,
+            match_limit,
+            client_order_id,
+            use_only_deposited_funds,
         )
     }
 
