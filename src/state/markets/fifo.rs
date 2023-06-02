@@ -639,7 +639,7 @@ impl<
         &self,
         size_in_adjusted_quote_lots: AdjustedQuoteLots,
     ) -> Option<AdjustedQuoteLots> {
-        let fee_adjustment = self.compute_fee(AdjustedQuoteLots::MAX).as_u128() - u64::MAX as u128;
+        let fee_adjustment = u64::MAX as u128 - self.compute_fee(AdjustedQuoteLots::MAX).as_u128();
         // Return an option to catch truncation from downcasting to u64
         u64::try_from(size_in_adjusted_quote_lots.as_u128() * u64::MAX as u128 / fee_adjustment)
             .ok()
