@@ -2848,7 +2848,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .await
         .unwrap();
 
-    // Send 100 orders on each side to verify there is enough compute to do so
+    // Send 30 orders on each side to verify there is enough compute to do so
     let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
@@ -3112,7 +3112,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         default_taker,
         ..
     } = &phoenix_ctx;
-    // Send 40 orders on each side to verify there is enough compute to do so
+    // Send 30 orders on each side to verify there is enough compute to do so
     let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
