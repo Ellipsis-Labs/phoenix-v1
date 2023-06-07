@@ -22,7 +22,9 @@ use sokoban::{FromSlice, RedBlackTree};
 use std::fmt::Debug;
 
 #[repr(C)]
-#[derive(Eq, PartialEq, Debug, Default, Copy, Clone, Zeroable, Pod)]
+#[derive(
+    Eq, BorshDeserialize, BorshSerialize, PartialEq, Debug, Default, Copy, Clone, Zeroable, Pod,
+)]
 pub struct FIFOOrderId {
     /// The price of the order, in ticks. Each market has a designated
     /// tick size (some number of quote lots per base unit) that is used to convert the price to ticks.

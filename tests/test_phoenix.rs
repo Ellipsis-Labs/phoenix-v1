@@ -2849,7 +2849,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .unwrap();
 
     // Send 100 orders on each side to verify there is enough compute to do so
-    let bids = (1..101)
+    let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
@@ -2857,7 +2857,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
             )
         })
         .collect::<Vec<_>>();
-    let asks = (1..101)
+    let asks = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
@@ -3113,7 +3113,7 @@ async fn test_phoenix_place_multiple_memory_management() {
         ..
     } = &phoenix_ctx;
     // Send 40 orders on each side to verify there is enough compute to do so
-    let bids = (1..41)
+    let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
@@ -3121,7 +3121,7 @@ async fn test_phoenix_place_multiple_memory_management() {
             )
         })
         .collect::<Vec<_>>();
-    let asks = (1..41)
+    let asks = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),

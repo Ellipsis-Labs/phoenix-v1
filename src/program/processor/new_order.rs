@@ -14,7 +14,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use itertools::Itertools;
 use solana_program::{
     account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult, log::sol_log_compute_units,
-    program_error::ProgramError, pubkey::Pubkey, sysvar::Sysvar,
+    program::set_return_data, program_error::ProgramError, pubkey::Pubkey, sysvar::Sysvar,
 };
 use std::mem::size_of;
 
@@ -308,7 +308,7 @@ fn process_new_order<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
-        let (_order_id, matching_engine_response) = market
+        let (order_id, matching_engine_response) = market
             .place_order(
                 trader.key,
                 *order_packet,
@@ -316,6 +316,10 @@ fn process_new_order<'a, 'info>(
                 &mut get_clock_fn,
             )
             .ok_or(PhoenixError::NewOrderError)?;
+
+        if let Some(order_id) = order_id {
+            set_return_data(vec![order_id].try_to_vec()?.as_ref());
+        }
 
         (
             matching_engine_response.num_quote_lots_out * quote_lot_size,
@@ -425,6 +429,7 @@ fn process_multiple_new_orders<'a, 'info>(
     };
 
     {
+        let mut order_ids = Vec::with_capacity(bids.len() + asks.len());
         let clock = Clock::get()?;
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
@@ -470,9 +475,12 @@ fn process_multiple_new_orders<'a, 'info>(
                 };
 
                 let matching_engine_response = {
-                    let (_order_id, matching_engine_response) = market
+                    let (order_id, matching_engine_response) = market
                         .place_order(trader.key, order_packet, record_event_fn, &mut get_clock_fn)
                         .ok_or(PhoenixError::NewOrderError)?;
+                    if let Some(order_id) = order_id {
+                        order_ids.push(order_id);
+                    }
                     matching_engine_response
                 };
 
@@ -481,6 +489,9 @@ fn process_multiple_new_orders<'a, 'info>(
                 base_lots_to_deposit +=
                     matching_engine_response.get_deposit_amount_ask_in_base_lots();
             }
+        }
+        if !order_ids.is_empty() {
+            set_return_data(order_ids.try_to_vec()?.as_ref());
         }
     }
 
