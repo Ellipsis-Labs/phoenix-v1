@@ -335,7 +335,6 @@ fn process_new_order<'a, 'info>(
             .ok_or(PhoenixError::NewOrderError)?;
 
         if let Some(order_id) = order_id {
-            phoenix_log!("Successfully placed an order");
             order_ids.push(order_id);
         }
 
@@ -508,7 +507,6 @@ fn process_multiple_new_orders<'a, 'info>(
                     matching_engine_response.get_deposit_amount_ask_in_base_lots();
             }
         }
-        phoenix_log!("Successfully placed {} orders", order_ids.len());
     }
 
     if !no_deposit {
