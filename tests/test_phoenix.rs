@@ -1,3 +1,4 @@
+use borsh::BorshSerialize;
 use ellipsis_client::program_test::*;
 use ellipsis_client::EllipsisClient;
 use phoenix::phoenix_log_authority;
@@ -2848,8 +2849,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .await
         .unwrap();
 
-    // Send 30 orders on each side to verify there is enough compute to do so
-    let bids = (1..30)
+    // Send 21 orders on each side to verify there is enough compute to do so (this is the upper bound due to the transaction size)
+    let bids = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
@@ -2857,7 +2858,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
             )
         })
         .collect::<Vec<_>>();
-    let asks = (1..30)
+    let asks = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
@@ -2867,6 +2868,9 @@ async fn test_phoenix_place_multiple_limit_orders() {
         .collect::<Vec<_>>();
 
     let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
+
+    let byte_len = multiple_order_packet.try_to_vec().unwrap().len();
+    assert_eq!(byte_len, 766);
 
     let new_order_ix = create_new_multiple_order_instruction(
         &sdk.core.active_market_key,
@@ -3112,8 +3116,8 @@ async fn test_phoenix_place_multiple_memory_management() {
         default_taker,
         ..
     } = &phoenix_ctx;
-    // Send 30 orders on each side to verify there is enough compute to do so
-    let bids = (1..30)
+    // Send 21 orders on each side to verify there is enough compute to do so (this is the upper bound due to the transaction size)
+    let bids = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
@@ -3121,7 +3125,7 @@ async fn test_phoenix_place_multiple_memory_management() {
             )
         })
         .collect::<Vec<_>>();
-    let asks = (1..30)
+    let asks = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
                 sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
