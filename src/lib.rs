@@ -22,9 +22,10 @@ pub mod state;
 
 use crate::program::processor::*;
 
+use borsh::BorshSerialize;
 // You need to import Pubkey prior to using the declare_id macro
 use ellipsis_macros::declare_id;
-use solana_program::pubkey::Pubkey;
+use solana_program::{program::set_return_data, pubkey::Pubkey};
 
 use program::{
     assert_with_msg, event_recorder::EventRecorder, PhoenixInstruction, PhoenixLogContext,
@@ -135,6 +136,7 @@ pub fn process_instruction(
     let mut event_recorder = EventRecorder::new(phoenix_log_context, &market_context, instruction)?;
 
     let mut record_event_fn = |e: MarketEvent<Pubkey>| event_recorder.add_event(e);
+    let mut order_ids = Vec::new();
 
     match instruction {
         PhoenixInstruction::InitializeMarket => {
@@ -169,6 +171,7 @@ pub fn process_instruction(
                 accounts,
                 data,
                 &mut record_event_fn,
+                &mut order_ids,
             )?
         }
         PhoenixInstruction::PlaceLimitOrderWithFreeFunds => {
@@ -179,6 +182,7 @@ pub fn process_instruction(
                 accounts,
                 data,
                 &mut record_event_fn,
+                &mut order_ids,
             )?;
         }
         PhoenixInstruction::PlaceMultiplePostOnlyOrders => {
@@ -189,6 +193,7 @@ pub fn process_instruction(
                 accounts,
                 data,
                 &mut record_event_fn,
+                &mut order_ids,
             )?;
         }
         PhoenixInstruction::PlaceMultiplePostOnlyOrdersWithFreeFunds => {
@@ -199,6 +204,7 @@ pub fn process_instruction(
                 accounts,
                 data,
                 &mut record_event_fn,
+                &mut order_ids,
             )?;
         }
         PhoenixInstruction::ReduceOrder => {
@@ -356,5 +362,11 @@ pub fn process_instruction(
         }
         _ => unreachable!(),
     }
-    event_recorder.increment_market_sequence_number_and_flush(market_context.market_info)
+    event_recorder.increment_market_sequence_number_and_flush(market_context.market_info)?;
+    // We set the order ids at the end of the instruction because the return data gets cleared after
+    // every CPI call.
+    if !order_ids.is_empty() {
+        set_return_data(order_ids.try_to_vec()?.as_ref());
+    }
+    Ok(())
 }

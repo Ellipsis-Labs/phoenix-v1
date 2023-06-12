@@ -8,7 +8,11 @@ use crate::{
         MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
     quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, Ticks, WrapperU64},
-    state::{decode_order_packet, markets::MarketEvent, OrderPacket, OrderPacketMetadata, Side},
+    state::{
+        decode_order_packet,
+        markets::{FIFOOrderId, MarketEvent},
+        OrderPacket, OrderPacketMetadata, Side,
+    },
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use itertools::Itertools;
@@ -101,11 +105,13 @@ pub(crate) fn process_swap<'a, 'info>(
         ProgramError::InvalidInstructionData,
         "Instruction does not allow using deposited funds",
     )?;
+    let mut order_ids = vec![];
     process_new_order(
         new_order_context,
         market_context,
         &mut order_packet,
         record_event_fn,
+        &mut order_ids,
     )
 }
 
@@ -140,11 +146,13 @@ pub(crate) fn process_swap_with_free_funds<'a, 'info>(
         ProgramError::InvalidInstructionData,
         "Order must be set to use only deposited funds",
     )?;
+    let mut order_ids = vec![];
     process_new_order(
         new_order_context,
         market_context,
         &mut order_packet,
         record_event_fn,
+        &mut order_ids,
     )
 }
 
@@ -156,6 +164,7 @@ pub(crate) fn process_place_limit_order<'a, 'info>(
     accounts: &'a [AccountInfo<'info>],
     data: &[u8],
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, false)?;
     let mut order_packet = decode_order_packet(data).ok_or_else(|| {
@@ -182,6 +191,7 @@ pub(crate) fn process_place_limit_order<'a, 'info>(
         market_context,
         &mut order_packet,
         record_event_fn,
+        order_ids,
     )
 }
 
@@ -195,6 +205,7 @@ pub(crate) fn process_place_limit_order_with_free_funds<'a, 'info>(
     accounts: &'a [AccountInfo<'info>],
     data: &[u8],
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, true)?;
     let mut order_packet = decode_order_packet(data).ok_or_else(|| {
@@ -221,6 +232,7 @@ pub(crate) fn process_place_limit_order_with_free_funds<'a, 'info>(
         market_context,
         &mut order_packet,
         record_event_fn,
+        order_ids,
     )
 }
 
@@ -234,6 +246,7 @@ pub(crate) fn process_place_multiple_post_only_orders<'a, 'info>(
     accounts: &'a [AccountInfo<'info>],
     data: &[u8],
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, false)?;
     let multiple_order_packet = MultipleOrderPacket::try_from_slice(data)?;
@@ -248,6 +261,7 @@ pub(crate) fn process_place_multiple_post_only_orders<'a, 'info>(
         market_context,
         multiple_order_packet,
         record_event_fn,
+        order_ids,
         false,
     )
 }
@@ -264,6 +278,7 @@ pub(crate) fn process_place_multiple_post_only_orders_with_free_funds<'a, 'info>
     accounts: &'a [AccountInfo<'info>],
     data: &[u8],
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
 ) -> ProgramResult {
     let new_order_context = NewOrderContext::load_post_allowed(market_context, accounts, true)?;
     let multiple_order_packet = MultipleOrderPacket::try_from_slice(data)?;
@@ -277,6 +292,7 @@ pub(crate) fn process_place_multiple_post_only_orders_with_free_funds<'a, 'info>
         market_context,
         multiple_order_packet,
         record_event_fn,
+        order_ids,
         true,
     )
 }
@@ -286,6 +302,7 @@ fn process_new_order<'a, 'info>(
     market_context: &PhoenixMarketContext<'a, 'info>,
     order_packet: &mut OrderPacket,
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
 ) -> ProgramResult {
     let PhoenixMarketContext {
         market_info,
@@ -308,7 +325,7 @@ fn process_new_order<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
-        let (_order_id, matching_engine_response) = market
+        let (order_id, matching_engine_response) = market
             .place_order(
                 trader.key,
                 *order_packet,
@@ -316,6 +333,10 @@ fn process_new_order<'a, 'info>(
                 &mut get_clock_fn,
             )
             .ok_or(PhoenixError::NewOrderError)?;
+
+        if let Some(order_id) = order_id {
+            order_ids.push(order_id);
+        }
 
         (
             matching_engine_response.num_quote_lots_out * quote_lot_size,
@@ -402,6 +423,7 @@ fn process_multiple_new_orders<'a, 'info>(
     market_context: &PhoenixMarketContext<'a, 'info>,
     multiple_order_packet: MultipleOrderPacket,
     record_event_fn: &mut dyn FnMut(MarketEvent<Pubkey>),
+    order_ids: &mut Vec<FIFOOrderId>,
     no_deposit: bool,
 ) -> ProgramResult {
     let PhoenixMarketContext {
@@ -470,9 +492,12 @@ fn process_multiple_new_orders<'a, 'info>(
                 };
 
                 let matching_engine_response = {
-                    let (_order_id, matching_engine_response) = market
+                    let (order_id, matching_engine_response) = market
                         .place_order(trader.key, order_packet, record_event_fn, &mut get_clock_fn)
                         .ok_or(PhoenixError::NewOrderError)?;
+                    if let Some(order_id) = order_id {
+                        order_ids.push(order_id);
+                    }
                     matching_engine_response
                 };
 

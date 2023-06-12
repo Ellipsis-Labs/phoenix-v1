@@ -22,7 +22,9 @@ use sokoban::{FromSlice, RedBlackTree};
 use std::fmt::Debug;
 
 #[repr(C)]
-#[derive(Eq, PartialEq, Debug, Default, Copy, Clone, Zeroable, Pod)]
+#[derive(
+    Eq, BorshDeserialize, BorshSerialize, PartialEq, Debug, Default, Copy, Clone, Zeroable, Pod,
+)]
 pub struct FIFOOrderId {
     /// The price of the order, in ticks. Each market has a designated
     /// tick size (some number of quote lots per base unit) that is used to convert the price to ticks.
@@ -639,7 +641,7 @@ impl<
         &self,
         size_in_adjusted_quote_lots: AdjustedQuoteLots,
     ) -> Option<AdjustedQuoteLots> {
-        let fee_adjustment = self.compute_fee(AdjustedQuoteLots::MAX).as_u128() - u64::MAX as u128;
+        let fee_adjustment = u64::MAX as u128 - self.compute_fee(AdjustedQuoteLots::MAX).as_u128();
         // Return an option to catch truncation from downcasting to u64
         u64::try_from(size_in_adjusted_quote_lots.as_u128() * u64::MAX as u128 / fee_adjustment)
             .ok()

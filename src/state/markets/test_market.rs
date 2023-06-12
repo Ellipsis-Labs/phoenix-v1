@@ -1921,6 +1921,85 @@ fn test_fok_with_slippage_3() {
 }
 
 #[test]
+fn test_sell_with_quote_lot_budget() {
+    let mut rng = StdRng::seed_from_u64(2);
+    let taker_bps = 0;
+    let mut market = Box::new(setup_market_with_params(1000_u64, 1000_u64, taker_bps));
+    let mut event_recorder = VecDeque::new();
+    let mut record_event_fn = |e: MarketEvent<TraderId>| event_recorder.push_back(e);
+
+    let trader = rng.gen::<u128>();
+    let taker = rng.gen::<u128>();
+
+    assert!(market
+        .place_order(
+            &trader,
+            OrderPacket::new_post_only_default(Side::Bid, 100, 10000),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    assert!(market
+        .place_order(
+            &trader,
+            OrderPacket::new_post_only_default(Side::Bid, 99, 20000),
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .is_some());
+
+    let (_, res) = market
+        .place_order(
+            &taker,
+            OrderPacket::ImmediateOrCancel {
+                side: Side::Ask,
+                num_base_lots: BaseLots::ZERO,
+                num_quote_lots: QuoteLots::new(1000000),
+                min_base_lots_to_fill: BaseLots::new(0),
+                min_quote_lots_to_fill: QuoteLots::new(0),
+                match_limit: None,
+                use_only_deposited_funds: false,
+                client_order_id: 0,
+                price_in_ticks: None,
+                self_trade_behavior: SelfTradeBehavior::Abort,
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .unwrap();
+
+    assert_eq!(res.num_quote_lots_out, QuoteLots::new(1000000));
+
+    let (_, res) = market
+        .place_order(
+            &taker,
+            OrderPacket::ImmediateOrCancel {
+                side: Side::Ask,
+                num_base_lots: BaseLots::ZERO,
+                num_quote_lots: QuoteLots::new(1000000),
+                min_base_lots_to_fill: BaseLots::new(0),
+                min_quote_lots_to_fill: QuoteLots::new(0),
+                match_limit: None,
+                use_only_deposited_funds: false,
+                client_order_id: 0,
+                price_in_ticks: None,
+                self_trade_behavior: SelfTradeBehavior::Abort,
+                last_valid_slot: None,
+                last_valid_unix_timestamp_in_seconds: None,
+            },
+            &mut record_event_fn,
+            &mut get_clock_fn,
+        )
+        .unwrap();
+
+    assert_eq!(res.num_base_lots_in, BaseLots::new(10101));
+    assert_eq!(res.num_quote_lots_out, QuoteLots::new(10101 * 99));
+}
+
+#[test]
 fn test_fees_basic() {
     let mut rng = StdRng::seed_from_u64(2);
     let taker_bps = 5;

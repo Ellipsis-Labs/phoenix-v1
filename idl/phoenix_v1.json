@@ -2158,6 +2158,24 @@
       }
     },
     {
+      "name": "FIFOOrderId",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "priceInTicks",
+            "type": {
+              "defined": "Ticks"
+            }
+          },
+          {
+            "name": "orderSequenceNumber",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "PhoenixMarketEvent",
       "type": {
         "kind": "enum",
