@@ -42,7 +42,7 @@ static_assertions = "=1.1.0"
 
 [dev-dependencies]
 rand = "0.7.3"
-ellipsis-client = "0.1.15"
+ellipsis-client = "0.2.1"
 tokio = { version = "1.8.4", features = ["full"] }
 solana-sdk = "=1.14.9"
-phoenix-sdk = { git = "https://github.com/Ellipsis-Labs/phoenix-sdk", rev = "adb01a3" }
+phoenix-sdk = "0.4.3"

@@ -10,6 +10,7 @@ use phoenix::program::MarketHeader;
 use phoenix::quantities::WrapperU64;
 use phoenix::quantities::{BaseLots, QuoteLots};
 use phoenix_sdk::sdk_client::MarketEventDetails;
+use phoenix_sdk::sdk_client::MarketMetadata;
 use phoenix_sdk::sdk_client::Reduce;
 use sokoban::ZeroCopy;
 use solana_program::instruction::AccountMeta;
@@ -43,6 +44,8 @@ pub struct PhoenixTestAccount {
 pub struct PhoenixTestClient {
     ctx: ProgramTestContext,
     sdk: SDKClient,
+    market: Pubkey,
+    meta: MarketMetadata,
 }
 
 pub struct PhoenixTestContext {
@@ -61,6 +64,8 @@ async fn setup_account(
     authority: &Keypair,
     base_mint: Pubkey,
     quote_mint: Pubkey,
+    base_amount: u64,
+    quote_amount: u64,
 ) -> PhoenixTestAccount {
     // initialize user and ATAs
     let user = Keypair::new();
@@ -82,7 +87,7 @@ async fn setup_account(
         authority,
         &base_mint,
         &base_ata,
-        1_000_000 * 1e9 as u64,
+        base_amount * 1e9 as u64,
         None,
     )
     .await
@@ -93,7 +98,7 @@ async fn setup_account(
         authority,
         &quote_mint,
         &quote_ata,
-        1_000_000 * 1e6 as u64,
+        quote_amount * 1e6 as u64,
         None,
     )
     .await
@@ -168,6 +173,8 @@ async fn bootstrap_with_parameters(
         &authority,
         base_mint.pubkey(),
         quote_mint.pubkey(),
+        1_000_000,
+        1_000_000,
     )
     .await;
     let taker = setup_account(
@@ -175,6 +182,8 @@ async fn bootstrap_with_parameters(
         &authority,
         base_mint.pubkey(),
         quote_mint.pubkey(),
+        1_000_000,
+        1_000_000,
     )
     .await;
 
@@ -245,10 +254,19 @@ async fn bootstrap_with_parameters(
         )
         .await
         .unwrap();
+    let mut sdk = SDKClient::new_from_ellipsis_client(ellipsis_client)
+        .await
+        .unwrap();
+    sdk.add_market(&market.pubkey()).await.unwrap();
+    let meta = *sdk
+        .get_market_metadata_from_cache(&market.pubkey())
+        .unwrap();
     (
         PhoenixTestClient {
             ctx: context,
-            sdk: SDKClient::new_from_ellipsis_client(&market.pubkey(), ellipsis_client).await,
+            sdk,
+            market: market.pubkey(),
+            meta,
         },
         PhoenixTestContext {
             admin: payer,
@@ -259,47 +277,58 @@ async fn bootstrap_with_parameters(
     )
 }
 
-async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> PhoenixTestAccount {
-    let meta = sdk.get_active_market_metadata();
+async fn get_new_maker(
+    test_client: &PhoenixTestClient,
+    context: &PhoenixTestContext,
+    base_amount: u64,
+    quote_amount: u64,
+) -> PhoenixTestAccount {
+    let meta = test_client.meta;
 
     let maker = setup_account(
-        &sdk.client,
+        &test_client.sdk.client,
         &context.mint_authority,
         meta.base_mint,
         meta.quote_mint,
+        base_amount,
+        quote_amount,
     )
     .await;
 
     // Request seat for maker (by authority)
-    sdk.client
+    test_client
+        .sdk
+        .client
         .sign_send_instructions(
             vec![
                 system_instruction::transfer(
-                    &sdk.client.payer.pubkey(),
-                    &get_seat_address(&sdk.active_market_key, &maker.user.pubkey()).0,
+                    &test_client.sdk.client.payer.pubkey(),
+                    &get_seat_address(&test_client.market, &maker.user.pubkey()).0,
                     5000,
                 ),
                 create_request_seat_authorized_instruction(
-                    &sdk.client.payer.pubkey(),
-                    &sdk.client.payer.pubkey(),
-                    &sdk.core.active_market_key,
+                    &test_client.sdk.client.payer.pubkey(),
+                    &test_client.sdk.client.payer.pubkey(),
+                    &test_client.market,
                     &maker.user.pubkey(),
                 ),
             ],
-            vec![&sdk.client.payer],
+            vec![&test_client.sdk.client.payer],
         )
         .await
         .unwrap();
 
-    sdk.client
+    test_client
+        .sdk
+        .client
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
-                &sdk.client.payer.pubkey(),
-                &sdk.core.active_market_key,
+                &test_client.sdk.client.payer.pubkey(),
+                &test_client.market,
                 &maker.user.pubkey(),
                 SeatApprovalStatus::Approved,
             )],
-            vec![&sdk.client.payer],
+            vec![&test_client.sdk.client.payer],
         )
         .await
         .unwrap();
@@ -310,14 +339,17 @@ async fn get_new_maker(sdk: &SDKClient, context: &PhoenixTestContext) -> Phoenix
 #[tokio::test]
 async fn test_phoenix_request_seats() {
     let (phoenix_client, phoenix_ctx) = bootstrap_default(0).await;
-    let PhoenixTestClient { mut ctx, sdk, .. } = phoenix_client;
+    let PhoenixTestClient {
+        mut ctx,
+        sdk,
+        meta,
+        market,
+    } = phoenix_client;
     let PhoenixTestContext { mint_authority, .. } = &phoenix_ctx;
 
-    let meta = sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
-    let market = &sdk.core.active_market_key;
     // Don't use the default_maker since we are testing the request_seats instruction
     let maker = Keypair::new();
     airdrop(&sdk.client, &maker.pubkey(), sol(20.0))
@@ -360,7 +392,7 @@ async fn test_phoenix_request_seats() {
     // Request seat for attacker
     sdk.client
         .sign_send_instructions(
-            vec![create_request_seat_instruction(&attacker.pubkey(), market)],
+            vec![create_request_seat_instruction(&attacker.pubkey(), &market)],
             vec![&attacker],
         )
         .await
@@ -387,7 +419,7 @@ async fn test_phoenix_request_seats() {
     // Request seat for maker
     sdk.client
         .sign_send_instructions(
-            vec![create_request_seat_instruction(&maker.pubkey(), market)],
+            vec![create_request_seat_instruction(&maker.pubkey(), &market)],
             vec![&maker],
         )
         .await
@@ -399,7 +431,7 @@ async fn test_phoenix_request_seats() {
             .sign_send_instructions(
                 vec![create_change_seat_status_instruction(
                     &maker.pubkey(),
-                    market,
+                    &market,
                     &maker.pubkey(),
                     SeatApprovalStatus::Approved,
                 )],
@@ -415,7 +447,7 @@ async fn test_phoenix_request_seats() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &sdk.get_trader(),
-                market,
+                &market,
                 &maker.pubkey(),
                 SeatApprovalStatus::Approved,
             )],
@@ -429,7 +461,7 @@ async fn test_phoenix_request_seats() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &sdk.get_trader(),
-                market,
+                &market,
                 &maker.pubkey(),
                 SeatApprovalStatus::Retired,
             )],
@@ -445,7 +477,7 @@ async fn test_phoenix_request_seats() {
             .sign_send_instructions(
                 vec![create_change_seat_status_instruction(
                     &sdk.get_trader(),
-                    market,
+                    &market,
                     &maker.pubkey(),
                     SeatApprovalStatus::Approved,
                 )],
@@ -457,14 +489,21 @@ async fn test_phoenix_request_seats() {
     );
 
     // Request seat for maker1 (by authority)
-    let PhoenixTestAccount { user: maker1, .. } =
-        setup_account(&sdk.client, mint_authority, *base_mint, *quote_mint).await;
+    let PhoenixTestAccount { user: maker1, .. } = setup_account(
+        &sdk.client,
+        mint_authority,
+        *base_mint,
+        *quote_mint,
+        1_000_000,
+        1_000_000,
+    )
+    .await;
     sdk.client
         .sign_send_instructions(
             vec![create_request_seat_authorized_instruction(
                 &sdk.client.payer.pubkey(),
                 &sdk.client.payer.pubkey(),
-                market,
+                &market,
                 &maker1.pubkey(),
             )],
             vec![],
@@ -477,7 +516,7 @@ async fn test_phoenix_request_seats() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &sdk.client.payer.pubkey(),
-                market,
+                &market,
                 &maker1.pubkey(),
                 SeatApprovalStatus::Approved,
             )],
@@ -487,12 +526,15 @@ async fn test_phoenix_request_seats() {
         .unwrap();
 
     // Make an order to get a seat
-    let params =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1);
+    let params = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(100.0),
+        1,
+    );
     sdk.client
         .sign_send_instructions(
             vec![create_new_order_instruction(
-                market,
+                &market,
                 &maker1.pubkey(),
                 base_mint,
                 quote_mint,
@@ -508,7 +550,7 @@ async fn test_phoenix_request_seats() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &sdk.client.payer.pubkey(),
-                market,
+                &market,
                 &maker1.pubkey(),
                 SeatApprovalStatus::Retired,
             )],
@@ -522,7 +564,7 @@ async fn test_phoenix_request_seats() {
             .sign_send_instructions(
                 vec![create_evict_seat_instruction(
                     &sdk.client.payer.pubkey(),
-                    market,
+                    &market,
                     &maker1.pubkey(),
                     base_mint,
                     quote_mint,
@@ -538,7 +580,7 @@ async fn test_phoenix_request_seats() {
     sdk.client
         .sign_send_instructions(
             create_force_cancel_orders_instructions(
-                market,
+                &market,
                 &maker1.pubkey(),
                 &sdk.client.payer.pubkey(),
                 base_mint,
@@ -554,7 +596,7 @@ async fn test_phoenix_request_seats() {
         .sign_send_instructions(
             vec![create_evict_seat_instruction(
                 &sdk.client.payer.pubkey(),
-                market,
+                &market,
                 &maker1.pubkey(),
                 base_mint,
                 quote_mint,
@@ -576,42 +618,55 @@ async fn get_sequence_number(client: &EllipsisClient, market: &Pubkey) -> u64 {
 #[tokio::test]
 async fn test_phoenix_orders() {
     let (phoenix_client, ctx) = bootstrap_default(0).await;
-    let PhoenixTestClient { ctx: _, sdk, .. } = phoenix_client;
+    let PhoenixTestClient {
+        ctx: _,
+        sdk,
+        meta,
+        market,
+    } = &phoenix_client;
 
     let PhoenixTestContext { default_maker, .. } = &ctx;
 
-    let meta = sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
     let mut orders = vec![];
 
     // Place a bid at 100
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(100.0),
+        1,
+    );
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
         &limit_order,
     ));
     // Place a bid at 99
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(99.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(99.0),
+        1,
+    );
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
         &limit_order,
     ));
     // Place an ask at 101
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(101.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(101.0),
+        1,
+    );
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -619,10 +674,13 @@ async fn test_phoenix_orders() {
     ));
 
     // Place an ask at 102
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(102.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(102.0),
+        1,
+    );
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -635,7 +693,7 @@ async fn test_phoenix_orders() {
         .client
         .sign_send_instructions(
             vec![create_new_order_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -652,7 +710,7 @@ async fn test_phoenix_orders() {
         .client
         .sign_send_instructions(
             vec![create_new_order_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -672,7 +730,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -696,7 +754,7 @@ async fn test_phoenix_orders() {
     assert_eq!(base_start, 999999998000000);
     assert_eq!(quote_start, 999999801000);
 
-    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let sequence_number = get_sequence_number(&sdk.client, market).await;
 
     let cancel_orders = vec![
         CancelOrderParams {
@@ -714,7 +772,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -729,7 +787,7 @@ async fn test_phoenix_orders() {
 
     let mut base_end = get_token_balance(&sdk.client, default_maker.base_ata).await;
     let mut quote_end = get_token_balance(&sdk.client, default_maker.quote_ata).await;
-    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let new_sequence_number = get_sequence_number(&sdk.client, market).await;
 
     // maker receives base tokens
     assert_eq!(base_end, 1000000000000000);
@@ -742,7 +800,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -776,7 +834,7 @@ async fn test_phoenix_orders() {
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_multiple_orders_by_id_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -813,50 +871,59 @@ async fn test_phoenix_orders() {
 
     // maker receives quote tokens
     assert_eq!(base_end, 1000000000000000);
-    assert_eq!(quote_end, quote_start + sdk.quote_lots_to_quote_atoms(9900));
+    assert_eq!(
+        quote_end,
+        quote_start + meta.quote_lots_to_quote_atoms(9900)
+    );
 }
 
 #[tokio::test]
 async fn test_phoenix_cancel_all_orders() {
-    let (
-        PhoenixTestClient {
-            ctx: _, mut sdk, ..
-        },
-        phoenix_ctx,
-    ) = bootstrap_default(0).await;
+    let (mut phoenix_test_client, phoenix_ctx) = bootstrap_default(0).await;
     let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
-    let meta = *sdk.get_active_market_metadata();
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut phoenix_test_client;
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
     let mut orders = vec![];
     let payer_key = sdk.client.payer.pubkey();
     sdk.set_payer(clone_keypair(&default_maker.user));
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(100.0),
+        1,
+    );
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
         &limit_order,
     ));
     // Place a bid at 99
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(99.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(99.0),
+        1,
+    );
 
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
         &limit_order,
     ));
     // Place an ask at 101
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(101.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(101.0),
+        1,
+    );
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -864,10 +931,13 @@ async fn test_phoenix_cancel_all_orders() {
     ));
 
     // Place an ask at 102
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(102.0), 1);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(102.0),
+        1,
+    );
     orders.push(create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -875,12 +945,12 @@ async fn test_phoenix_cancel_all_orders() {
     ));
 
     sdk.client.set_payer(&payer_key).unwrap();
-    let sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let sequence_number = get_sequence_number(&sdk.client, market).await;
 
     sdk.client
         .sign_send_instructions(
             vec![create_cancel_all_orders_instruction(
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 base_mint,
                 quote_mint,
@@ -892,7 +962,7 @@ async fn test_phoenix_cancel_all_orders() {
 
     let base_end = get_token_balance(&sdk.client, default_maker.base_ata).await;
     let quote_end = get_token_balance(&sdk.client, default_maker.quote_ata).await;
-    let new_sequence_number = get_sequence_number(&sdk.client, &sdk.core.active_market_key).await;
+    let new_sequence_number = get_sequence_number(&sdk.client, market).await;
 
     // maker receives base tokens
     assert_eq!(base_end, 1000000000000000);
@@ -905,9 +975,7 @@ async fn test_phoenix_cancel_all_orders() {
 #[tokio::test]
 async fn test_phoenix_admin() {
     let (
-        PhoenixTestClient {
-            mut ctx, mut sdk, ..
-        },
+        mut phoenix_test_client,
         PhoenixTestContext {
             admin,
             default_maker,
@@ -915,46 +983,68 @@ async fn test_phoenix_admin() {
             ..
         },
     ) = bootstrap_default(5).await;
-    let meta = *sdk.get_active_market_metadata();
+
+    let PhoenixTestClient {
+        ctx,
+        sdk,
+        market,
+        meta,
+        ..
+    } = &mut phoenix_test_client;
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
-    let market = sdk.active_market_key;
 
     let mut orders = vec![];
 
     let payer_key = sdk.client.payer.pubkey();
     sdk.set_payer(clone_keypair(&default_maker.user));
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
-        &OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1),
+        &OrderPacket::new_limit_order_default(
+            Side::Bid,
+            meta.float_price_to_ticks_rounded_down(100.0),
+            1,
+        ),
     ));
     // Place a bid at 99
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
-        &OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(99.0), 1),
+        &OrderPacket::new_limit_order_default(
+            Side::Bid,
+            meta.float_price_to_ticks_rounded_down(99.0),
+            1,
+        ),
     ));
     // Place an ask at 101
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
-        &OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(101.0), 1),
+        &OrderPacket::new_limit_order_default(
+            Side::Ask,
+            meta.float_price_to_ticks_rounded_down(101.0),
+            1,
+        ),
     ));
 
     // Place an ask at 102
     orders.push(create_new_order_instruction(
-        &sdk.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
-        &OrderPacket::new_limit_order_default(Side::Ask, sdk.float_price_to_ticks(102.0), 1),
+        &OrderPacket::new_limit_order_default(
+            Side::Ask,
+            meta.float_price_to_ticks_rounded_down(102.0),
+            1,
+        ),
     ));
 
     sdk.client
@@ -1037,18 +1127,18 @@ async fn test_phoenix_admin() {
     );
     let params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
-        sdk.float_price_to_ticks(102.0),
+        meta.float_price_to_ticks_rounded_down(102.0),
         1,
         SelfTradeBehavior::DecrementTake,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
     assert!(
         sdk.client
             .sign_send_instructions(
                 vec![create_new_order_instruction(
-                    &sdk.core.active_market_key,
+                    market,
                     &default_taker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1066,7 +1156,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Closed
                 )],
                 vec![&successor],
@@ -1081,7 +1171,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &admin.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Paused
                 )],
                 vec![&admin],
@@ -1096,7 +1186,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Paused
                 )],
                 vec![&successor],
@@ -1110,7 +1200,7 @@ async fn test_phoenix_admin() {
         sdk.client
             .sign_send_instructions(
                 vec![create_cancel_up_to_instruction(
-                    &sdk.core.active_market_key,
+                    market,
                     &default_maker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1132,7 +1222,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Active
                 )],
                 vec![&successor],
@@ -1146,7 +1236,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Paused
                 )],
                 vec![&successor],
@@ -1163,7 +1253,7 @@ async fn test_phoenix_admin() {
         sdk.client
             .sign_send_instructions(
                 vec![create_new_order_instruction(
-                    &sdk.core.active_market_key,
+                    market,
                     &default_taker.user.pubkey(),
                     base_mint,
                     quote_mint,
@@ -1180,7 +1270,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Closed,
                 )],
                 vec![&successor],
@@ -1194,7 +1284,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Tombstoned,
                 )],
                 vec![&successor],
@@ -1209,7 +1299,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![
                     create_cancel_up_to_instruction(
-                        &sdk.core.active_market_key,
+                        market,
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1221,7 +1311,7 @@ async fn test_phoenix_admin() {
                         },
                     ),
                     create_cancel_up_to_instruction(
-                        &sdk.core.active_market_key,
+                        market,
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1248,7 +1338,7 @@ async fn test_phoenix_admin() {
                     // call withdraw
                     create_evict_seat_instruction(
                         &successor.pubkey(),
-                        &sdk.core.active_market_key,
+                        market,
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1265,7 +1355,7 @@ async fn test_phoenix_admin() {
         .sign_send_instructions(
             vec![create_change_seat_status_instruction(
                 &successor.pubkey(),
-                &sdk.core.active_market_key,
+                market,
                 &default_maker.user.pubkey(),
                 SeatApprovalStatus::NotApproved,
             )],
@@ -1282,7 +1372,7 @@ async fn test_phoenix_admin() {
                     // call withdraw
                     create_evict_seat_instruction(
                         &successor.pubkey(),
-                        &sdk.core.active_market_key,
+                        market,
                         &default_maker.user.pubkey(),
                         base_mint,
                         quote_mint,
@@ -1300,7 +1390,7 @@ async fn test_phoenix_admin() {
             .sign_send_instructions(
                 vec![create_change_market_status_instruction(
                     &successor.pubkey(),
-                    &sdk.core.active_market_key,
+                    market,
                     MarketStatus::Tombstoned
                 )],
                 vec![&successor],
@@ -1314,7 +1404,7 @@ async fn test_phoenix_admin() {
     sdk.client
         .sign_send_instructions(
             vec![create_collect_fees_instruction_default(
-                &sdk.active_market_key,
+                market,
                 &sdk.client.payer.pubkey(),
                 &sdk.client.payer.pubkey(), // Fee collector is the market creator in this case
                 quote_mint,
@@ -1328,7 +1418,7 @@ async fn test_phoenix_admin() {
         .sign_send_instructions(
             vec![create_change_market_status_instruction(
                 &successor.pubkey(),
-                &sdk.core.active_market_key,
+                market,
                 MarketStatus::Tombstoned,
             )],
             vec![&successor],
@@ -1339,36 +1429,42 @@ async fn test_phoenix_admin() {
 
 #[tokio::test]
 async fn test_phoenix_basic() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
+    let (mut client, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
         ..
     } = &ctx;
-    let meta = *sdk.get_active_market_metadata();
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
     sdk.set_payer(clone_keypair(&default_maker.user));
 
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(40.0),
-        sdk.float_price_to_ticks(36.0),
-        sdk.float_price_to_ticks(0.05),
-        sdk.raw_base_units_to_base_lots(1.0),
-        sdk.raw_base_units_to_base_lots(0.5),
+        meta.float_price_to_ticks_rounded_down(40.0),
+        meta.float_price_to_ticks_rounded_down(36.0),
+        meta.float_price_to_ticks_rounded_down(0.05),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(0.5),
         Side::Bid,
     )
     .await;
 
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(40.01),
-        sdk.float_price_to_ticks(45.5),
-        sdk.float_price_to_ticks(0.05),
-        sdk.raw_base_units_to_base_lots(1.2),
-        sdk.raw_base_units_to_base_lots(0.3),
+        meta.float_price_to_ticks_rounded_down(40.01),
+        meta.float_price_to_ticks_rounded_down(45.5),
+        meta.float_price_to_ticks_rounded_down(0.05),
+        meta.raw_base_units_to_base_lots_rounded_down(1.2),
+        meta.raw_base_units_to_base_lots_rounded_down(0.3),
         Side::Ask,
     )
     .await;
@@ -1376,11 +1472,11 @@ async fn test_phoenix_basic() {
 
     let params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
-        sdk.float_price_to_ticks(39.7),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(39.7),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::Abort,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
 
@@ -1388,7 +1484,7 @@ async fn test_phoenix_basic() {
     let quote_start = get_token_balance(&sdk.client, default_taker.quote_ata).await;
 
     let new_order_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1411,7 +1507,7 @@ async fn test_phoenix_basic() {
     let quote_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
 
     let withdraw_ix = create_withdraw_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1433,13 +1529,13 @@ async fn test_phoenix_basic() {
     };
 
     let cancel_multiple_ix = create_cancel_up_to_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
         &params,
     );
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     let mut orders = [&market_state.orderbook.bids]
         .iter()
         .flat_map(|ob| {
@@ -1474,7 +1570,7 @@ async fn test_phoenix_basic() {
     let quote_after_cancel = get_token_balance(&sdk.client, default_maker.quote_ata).await;
     assert!(quote_after_cancel == 1_000_000_000_000 - 398750000);
     let deposit_ix = create_deposit_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1488,19 +1584,18 @@ async fn test_phoenix_basic() {
         .await
         .unwrap();
 
-    let meta = sdk.get_active_market_metadata();
     let base_after_deposit = get_token_balance(&sdk.client, default_maker.base_ata).await;
     let quote_after_deposit = get_token_balance(&sdk.client, default_maker.quote_ata).await;
     assert_eq!(
         quote_after_deposit,
-        quote_after_cancel - meta.quote_lot_size
+        quote_after_cancel - meta.quote_atoms_per_quote_lot
     );
-    assert_eq!(base_after_deposit, base_end - meta.base_lot_size);
+    assert_eq!(base_after_deposit, base_end - meta.base_atoms_per_base_lot);
 
     let base_before_withdraw = base_after_deposit;
     let quote_before_withdraw = quote_after_deposit;
     let withdraw_ix = create_withdraw_funds_with_custom_amounts_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1515,33 +1610,38 @@ async fn test_phoenix_basic() {
     let quote_after_withdraw = get_token_balance(&sdk.client, default_maker.quote_ata).await;
     assert_eq!(
         quote_after_withdraw,
-        quote_before_withdraw + meta.quote_lot_size
+        quote_before_withdraw + meta.quote_atoms_per_quote_lot
     );
     assert_eq!(
         base_after_withdraw,
-        base_before_withdraw + meta.base_lot_size
+        base_before_withdraw + meta.base_atoms_per_base_lot
     );
 }
 
 #[tokio::test]
 async fn test_phoenix_fees() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(5).await;
+    let (mut client, ctx) = bootstrap_default(5).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
         admin,
         mint_authority,
     } = &ctx;
-    let meta = *sdk.get_active_market_metadata();
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
     sdk.set_payer(clone_keypair(&default_maker.user));
     // Place a bid at 100
-    let limit_order =
-        OrderPacket::new_limit_order_default(Side::Bid, sdk.float_price_to_ticks(100.0), 1000);
+    let limit_order = OrderPacket::new_limit_order_default(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(100.0),
+        1000,
+    );
     let make_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1555,7 +1655,7 @@ async fn test_phoenix_fees() {
 
     sdk.client.set_payer(&default_taker.user.pubkey()).unwrap();
     let taker_order = OrderPacket::new_ioc_sell_with_limit_price(
-        sdk.float_price_to_ticks(100.0),
+        meta.float_price_to_ticks_rounded_down(100.0),
         1000,
         SelfTradeBehavior::Abort,
         None,
@@ -1563,7 +1663,7 @@ async fn test_phoenix_fees() {
         false,
     );
     let take_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -1581,12 +1681,19 @@ async fn test_phoenix_fees() {
     println!("taker balance change {}", taker_diff);
     sdk.client.set_payer(&admin.pubkey()).unwrap();
 
-    let new_fee_recipient =
-        setup_account(&sdk.client, mint_authority, sdk.base_mint, sdk.quote_mint).await;
+    let new_fee_recipient = setup_account(
+        &sdk.client,
+        mint_authority,
+        meta.base_mint,
+        meta.quote_mint,
+        0,
+        0,
+    )
+    .await;
 
     let change_fee_recipient_ix = create_change_fee_recipient_instruction(
         &admin.pubkey(),
-        &sdk.active_market_key,
+        market,
         &new_fee_recipient.user.pubkey(),
     );
 
@@ -1600,7 +1707,7 @@ async fn test_phoenix_fees() {
 
     let change_fee_recipient_ix = create_change_fee_recipient_with_unclaimed_fees_instruction(
         &admin.pubkey(),
-        &sdk.active_market_key,
+        market,
         &new_fee_recipient.user.pubkey(),
         &admin.pubkey(),
     );
@@ -1614,14 +1721,14 @@ async fn test_phoenix_fees() {
     );
 
     let collect_fees_ix = create_collect_fees_instruction_default(
-        &sdk.core.active_market_key,
+        market,
         &admin.pubkey(),
         &new_fee_recipient.user.pubkey(),
         quote_mint,
     );
     let fee_ata = get_associated_token_address(&new_fee_recipient.user.pubkey(), quote_mint);
     let fee_dest_start = get_token_balance(&sdk.client, fee_ata).await;
-    let quote_vault = get_vault_address(&sdk.core.active_market_key, quote_mint).0;
+    let quote_vault = get_vault_address(market, quote_mint).0;
     let quote_balance_start = get_token_balance(&sdk.client, quote_vault).await;
 
     sdk.client
@@ -1640,16 +1747,14 @@ async fn test_phoenix_fees() {
     assert_eq!(quote_balance_end, 0);
     assert_eq!(fee_dest_balance - fee_dest_start, 50000);
 
-    let market_account_data = (sdk.client.get_account_data(&sdk.core.active_market_key))
-        .await
-        .unwrap();
+    let market_account_data = (sdk.client.get_account_data(market)).await.unwrap();
     let (header_bytes, bytes) = market_account_data.split_at(size_of::<MarketHeader>());
     let header = MarketHeader::load_bytes(header_bytes).unwrap();
-    let market = load_with_dispatch(&header.market_size_params, bytes)
+    let market_obj = load_with_dispatch(&header.market_size_params, bytes)
         .unwrap()
         .inner;
     assert_eq!(
-        market
+        market_obj
             .get_registered_traders()
             .get(&default_maker.user.pubkey())
             .unwrap()
@@ -1657,11 +1762,8 @@ async fn test_phoenix_fees() {
         BaseLots::new(1000)
     );
 
-    let change_fee_recipient_ix = create_change_fee_recipient_instruction(
-        &admin.pubkey(),
-        &sdk.active_market_key,
-        &Keypair::new().pubkey(),
-    );
+    let change_fee_recipient_ix =
+        create_change_fee_recipient_instruction(&admin.pubkey(), market, &Keypair::new().pubkey());
 
     assert!(
         sdk.client
@@ -1674,13 +1776,14 @@ async fn test_phoenix_fees() {
 
 #[tokio::test]
 async fn test_phoenix_cancel_with_free_funds() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
+    let (mut client, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext { default_maker, .. } = &ctx;
-    let meta = *sdk.get_active_market_metadata();
-    let market = sdk.active_market_key;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
     sdk.client.set_payer(&default_maker.user.pubkey()).unwrap();
-    let quote_lots_to_deposit = sdk.quote_units_to_quote_lots(10000.0);
-    let base_lots_to_deposit = sdk.raw_base_units_to_base_lots(100.0);
+    let quote_lots_to_deposit = meta.quote_units_to_quote_lots(10000.0);
+    let base_lots_to_deposit = meta.raw_base_units_to_base_lots_rounded_down(100.0);
     let params = DepositParams {
         quote_lots_to_deposit,
         base_lots_to_deposit,
@@ -1705,7 +1808,7 @@ async fn test_phoenix_cancel_with_free_funds() {
         .await
         .unwrap();
 
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
 
@@ -1731,14 +1834,14 @@ async fn test_phoenix_cancel_with_free_funds() {
         .await
         .unwrap();
 
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(!market_state.orderbook.bids.is_empty());
     assert!(
         market_state.traders[&trader].quote_lots_free
             == quote_lots.as_u64()
-                - (100 * 10 * sdk.tick_size_in_quote_atoms_per_base_unit
-                    / (sdk.num_base_lots_per_base_unit * sdk.quote_lot_size))
+                - (100 * 10 * meta.tick_size_in_quote_atoms_per_base_unit
+                    / (meta.num_base_lots_per_base_unit * meta.quote_atoms_per_quote_lot))
     );
 
     let mut orders = [&market_state.orderbook.bids, &market_state.orderbook.asks]
@@ -1777,7 +1880,7 @@ async fn test_phoenix_cancel_with_free_funds() {
     }
     assert!(orders.is_empty());
 
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     assert!(market_state.orderbook.bids.is_empty());
     assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
@@ -1804,14 +1907,14 @@ async fn test_phoenix_cancel_with_free_funds() {
         .await
         .unwrap();
 
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     assert!(!market_state.orderbook.bids.is_empty());
     assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(
         market_state.traders[&trader].quote_lots_free
             == quote_lots.as_u64()
-                - (100 * 10 * sdk.tick_size_in_quote_atoms_per_base_unit
-                    / (sdk.quote_lot_size * sdk.num_base_lots_per_base_unit))
+                - (100 * 10 * meta.tick_size_in_quote_atoms_per_base_unit
+                    / (meta.quote_atoms_per_quote_lot * meta.num_base_lots_per_base_unit))
     );
     sdk.client
         .sign_send_instructions(
@@ -1833,7 +1936,7 @@ async fn test_phoenix_cancel_with_free_funds() {
         .await
         .unwrap();
 
-    let market_state = sdk.get_market_state().await;
+    let market_state = sdk.get_market_state(market).await.unwrap();
     assert!(market_state.orderbook.bids.is_empty());
     assert!(market_state.traders[&trader].base_lots_free == base_lots.as_u64());
     assert!(market_state.traders[&trader].quote_lots_free == quote_lots.as_u64());
@@ -1841,15 +1944,17 @@ async fn test_phoenix_cancel_with_free_funds() {
 
 #[tokio::test]
 async fn test_phoenix_orders_with_free_funds() {
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_default(0).await;
+    let (mut client, ctx) = bootstrap_default(0).await;
     let PhoenixTestContext {
         default_maker,
         default_taker,
         ..
     } = &ctx;
-    let second_maker = get_new_maker(&sdk, &ctx).await;
+    let second_maker = get_new_maker(&client, &ctx, 1_000_000, 1_000_000).await;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
 
-    let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
@@ -1859,23 +1964,27 @@ async fn test_phoenix_orders_with_free_funds() {
     let quote_balance_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
 
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(40.0),
-        sdk.float_price_to_ticks(30.0),
-        sdk.float_price_to_ticks(1.0),
-        sdk.raw_base_units_to_base_lots(1.0),
-        sdk.raw_base_units_to_base_lots(1.0),
+        meta.float_price_to_ticks_rounded_down(40.0),
+        meta.float_price_to_ticks_rounded_down(30.0),
+        meta.float_price_to_ticks_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
         Side::Bid,
     )
     .await;
 
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(50.0),
-        sdk.float_price_to_ticks(60.0),
-        sdk.float_price_to_ticks(1.0),
-        sdk.raw_base_units_to_base_lots(1.0),
-        sdk.raw_base_units_to_base_lots(1.0),
+        meta.float_price_to_ticks_rounded_down(50.0),
+        meta.float_price_to_ticks_rounded_down(60.0),
+        meta.float_price_to_ticks_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
         Side::Ask,
     )
     .await;
@@ -1884,16 +1993,16 @@ async fn test_phoenix_orders_with_free_funds() {
     //Attempt to use free funds to trade, will reject because the taker has no seat
     let sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
-        sdk.float_price_to_ticks(31.0),
-        sdk.raw_base_units_to_base_lots(55.0),
+        meta.float_price_to_ticks_rounded_down(31.0),
+        meta.raw_base_units_to_base_lots_rounded_down(55.0),
         SelfTradeBehavior::Abort,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         true,
     );
 
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_taker.user.pubkey(),
         &sell_params,
     );
@@ -1907,41 +2016,41 @@ async fn test_phoenix_orders_with_free_funds() {
     //Trade through the first 10 levels of the book and self trade the last level on each side
     let sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
-        sdk.float_price_to_ticks(31.0),
-        sdk.raw_base_units_to_base_lots(55.0),
+        meta.float_price_to_ticks_rounded_down(31.0),
+        meta.raw_base_units_to_base_lots_rounded_down(55.0),
         SelfTradeBehavior::Abort,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
 
     let buy_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
-        sdk.float_price_to_ticks(59.0),
-        sdk.raw_base_units_to_base_lots(55.0),
+        meta.float_price_to_ticks_rounded_down(59.0),
+        meta.raw_base_units_to_base_lots_rounded_down(55.0),
         SelfTradeBehavior::Abort,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
 
     let self_trade_bid_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
-        sdk.float_price_to_ticks(30.0),
-        sdk.raw_base_units_to_base_lots(11.0),
+        meta.float_price_to_ticks_rounded_down(30.0),
+        meta.raw_base_units_to_base_lots_rounded_down(11.0),
         SelfTradeBehavior::DecrementTake,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
 
     let self_trade_offer_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
-        sdk.float_price_to_ticks(60.0),
-        sdk.raw_base_units_to_base_lots(11.0),
+        meta.float_price_to_ticks_rounded_down(60.0),
+        meta.raw_base_units_to_base_lots_rounded_down(11.0),
         SelfTradeBehavior::DecrementTake,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         false,
     );
 
@@ -1950,7 +2059,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for param in taker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &default_taker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -1964,7 +2073,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for param in maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -1988,12 +2097,12 @@ async fn test_phoenix_orders_with_free_funds() {
     //Attempt to send a LimitOrderWithFreeFunds with the second maker that will fail due to insufficient funds
     sdk.client.payer = clone_keypair(&second_maker.user);
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &second_maker.user.pubkey(),
         &OrderPacket::new_post_only_default(
             Side::Bid,
-            sdk.float_price_to_ticks(100.0),
-            sdk.raw_base_units_to_base_lots(10.0),
+            meta.float_price_to_ticks_rounded_down(100.0),
+            meta.raw_base_units_to_base_lots_rounded_down(10.0),
         ),
     );
     assert!(sdk
@@ -2005,40 +2114,40 @@ async fn test_phoenix_orders_with_free_funds() {
     //Add limit orders using the second maker, then use only free lots from the original maker to buy/sell via IOC
     let limit_buy_params = OrderPacket::new_limit_order_default(
         Side::Bid,
-        sdk.float_price_to_ticks(30.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(30.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
     );
 
     let limit_sell_params = OrderPacket::new_limit_order_default(
         Side::Ask,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
     );
 
     let ioc_buy_params = OrderPacket::new_ioc_by_lots(
         Side::Bid,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         true,
     );
 
     let ioc_sell_params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
-        sdk.float_price_to_ticks(30.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(30.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
-        sdk.get_next_client_order_id(),
+        0,
         true,
     );
     let second_maker_params = vec![limit_buy_params, limit_sell_params];
     let maker_ioc_params = vec![ioc_buy_params, ioc_sell_params];
     for param in second_maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2053,7 +2162,7 @@ async fn test_phoenix_orders_with_free_funds() {
     sdk.set_payer(clone_keypair(&default_maker.user));
     for param in maker_ioc_params {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             &param,
         );
@@ -2072,21 +2181,21 @@ async fn test_phoenix_orders_with_free_funds() {
     //Place a new buy and sell order using all remaining free lots + 1 extra unit
     let limit_buy_params = OrderPacket::new_limit_order_default(
         Side::Bid,
-        sdk.float_price_to_ticks(33.69),
-        sdk.raw_base_units_to_base_lots(101.0),
+        meta.float_price_to_ticks_rounded_down(33.69),
+        meta.raw_base_units_to_base_lots_rounded_down(101.0),
     );
 
     let limit_sell_params = OrderPacket::new_limit_order_default(
         Side::Ask,
-        sdk.float_price_to_ticks(50.0),
-        sdk.raw_base_units_to_base_lots(67.0),
+        meta.float_price_to_ticks_rounded_down(50.0),
+        meta.raw_base_units_to_base_lots_rounded_down(67.0),
     );
 
     let maker_params = vec![limit_buy_params, limit_sell_params];
 
     for param in maker_params {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2111,15 +2220,15 @@ async fn test_phoenix_orders_with_free_funds() {
     let second_maker_quote_balance_start =
         get_token_balance(&sdk.client, second_maker.quote_ata).await;
     let new_order_ix = create_new_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &second_maker.user.pubkey(),
         &OrderPacket::new_ioc_by_lots(
             Side::Bid,
-            sdk.float_price_to_ticks(250.0),
-            sdk.raw_base_units_to_base_lots(10.0),
+            meta.float_price_to_ticks_rounded_down(250.0),
+            meta.raw_base_units_to_base_lots_rounded_down(10.0),
             SelfTradeBehavior::CancelProvide,
             None,
-            sdk.get_next_client_order_id(),
+            0,
             true,
         ),
     );
@@ -2132,8 +2241,8 @@ async fn test_phoenix_orders_with_free_funds() {
     //Add limit orders using the second maker using only free funds
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2142,8 +2251,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
-        sdk.float_price_to_ticks(35.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(35.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2152,7 +2261,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2178,8 +2287,8 @@ async fn test_phoenix_orders_with_free_funds() {
     //Check that internal free funds are now zero, so a new order uses new deposits
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2188,8 +2297,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
-        sdk.float_price_to_ticks(35.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(35.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2198,7 +2307,7 @@ async fn test_phoenix_orders_with_free_funds() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2223,10 +2332,8 @@ async fn test_phoenix_orders_with_free_funds() {
     );
 
     // Cancel all to free up some funds
-    let cancel_all_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
-        &second_maker.user.pubkey(),
-    );
+    let cancel_all_ix =
+        create_cancel_all_order_with_free_funds_instruction(market, &second_maker.user.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![cancel_all_ix], vec![&second_maker.user])
@@ -2235,8 +2342,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(5.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2245,8 +2352,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
-        sdk.float_price_to_ticks(35.0),
-        sdk.raw_base_units_to_base_lots(5.0),
+        meta.float_price_to_ticks_rounded_down(35.0),
+        meta.raw_base_units_to_base_lots_rounded_down(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2256,7 +2363,7 @@ async fn test_phoenix_orders_with_free_funds() {
     //Check that sending an orderpacket with free funds set to true fails if we send via the wrong instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2272,7 +2379,7 @@ async fn test_phoenix_orders_with_free_funds() {
     // Free funds order packet succeeds with correct instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2284,8 +2391,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
-        sdk.float_price_to_ticks(34.1),
-        sdk.raw_base_units_to_base_lots(5.0),
+        meta.float_price_to_ticks_rounded_down(34.1),
+        meta.raw_base_units_to_base_lots_rounded_down(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2294,8 +2401,8 @@ async fn test_phoenix_orders_with_free_funds() {
 
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
-        sdk.float_price_to_ticks(35.0),
-        sdk.raw_base_units_to_base_lots(5.0),
+        meta.float_price_to_ticks_rounded_down(35.0),
+        meta.raw_base_units_to_base_lots_rounded_down(5.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2305,7 +2412,7 @@ async fn test_phoenix_orders_with_free_funds() {
     // Order packet with free funds set to false fails if we send via the free funds instruction type
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_with_free_funds_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             &params,
         );
@@ -2319,18 +2426,18 @@ async fn test_phoenix_orders_with_free_funds() {
 
 #[tokio::test]
 async fn test_phoenix_place_multiple_limit_orders() {
-    let (
-        PhoenixTestClient {
-            mut ctx, mut sdk, ..
-        },
-        phoenix_ctx,
-    ) = bootstrap_default(0).await;
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
 
     let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
 
-    let second_maker = get_new_maker(&sdk, &phoenix_ctx).await;
+    let second_maker = get_new_maker(&client, &phoenix_ctx, 1_000_000, 1_000_000).await;
+    let PhoenixTestClient {
+        ctx,
+        sdk,
+        market,
+        meta,
+    } = &mut client;
 
-    let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
@@ -2343,28 +2450,28 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(8.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(8.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(9.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(9.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
         ],
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(10.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(10.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(11.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(11.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
@@ -2372,7 +2479,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2400,10 +2507,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
     assert_eq!(base_balance_start - base_balance_end, 20000000000);
     assert_eq!(quote_balance_start - quote_balance_end, 170000000);
 
-    let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
-        &default_maker.user.pubkey(),
-    );
+    let cancel_order_ix =
+        create_cancel_all_order_with_free_funds_instruction(market, &default_maker.user.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![cancel_order_ix], vec![&default_maker.user])
@@ -2414,32 +2519,32 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(9.0),
+                meta.float_price_to_ticks_rounded_down(8.0),
+                meta.raw_base_units_to_base_lots_rounded_down(9.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(11.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(10.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(10.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(11.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(12.0),
-                sdk.raw_base_units_to_base_lots(4.0),
+                meta.float_price_to_ticks_rounded_down(12.0),
+                meta.raw_base_units_to_base_lots_rounded_down(4.0),
             ),
         ],
     );
 
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2455,34 +2560,34 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(8.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(8.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(9.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(9.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(3.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(1.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(3.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(1.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
         ],
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(10.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(10.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(11.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(11.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
@@ -2490,7 +2595,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     );
 
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2505,41 +2610,41 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(8.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(8.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(9.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(9.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
         ],
         vec![
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(17.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(10.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(17.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(17.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(5.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(17.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(5.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
             CondensedOrder {
-                price_in_ticks: sdk.float_price_to_ticks(12.0),
-                size_in_base_lots: sdk.raw_base_units_to_base_lots(5.0),
+                price_in_ticks: meta.float_price_to_ticks_rounded_down(12.0),
+                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(5.0),
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
             },
         ],
     );
     let new_order_ix = create_new_multiple_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         &multiple_order_packet,
     );
@@ -2562,10 +2667,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
     ctx.warp_to_slot(2).unwrap();
 
     // Cancel orders to return the orderbook to empty
-    let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
-        &default_maker.user.pubkey(),
-    );
+    let cancel_order_ix =
+        create_cancel_all_order_with_free_funds_instruction(market, &default_maker.user.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![cancel_order_ix], vec![&default_maker.user])
@@ -2576,28 +2679,28 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(8.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(9.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(9.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(11.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2614,32 +2717,32 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(29.0),
-                sdk.raw_base_units_to_base_lots(1.0),
+                meta.float_price_to_ticks_rounded_down(29.0),
+                meta.raw_base_units_to_base_lots_rounded_down(1.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(9.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(19.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(19.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(30.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(30.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(25.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(25.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2655,8 +2758,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
     // Add limit orders to the book from the second maker
     let limit_buy_params = OrderPacket::new_limit_order(
         Side::Bid,
-        sdk.float_price_to_ticks(10.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2665,8 +2768,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     let limit_sell_params = OrderPacket::new_limit_order(
         Side::Ask,
-        sdk.float_price_to_ticks(20.0),
-        sdk.raw_base_units_to_base_lots(10.0),
+        meta.float_price_to_ticks_rounded_down(20.0),
+        meta.raw_base_units_to_base_lots_rounded_down(10.0),
         SelfTradeBehavior::CancelProvide,
         None,
         0,
@@ -2675,7 +2778,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
     for params in [limit_buy_params, limit_sell_params] {
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &second_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -2691,28 +2794,28 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(8.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(8.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(9.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(10.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(10.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(11.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(11.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2728,19 +2831,19 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(20.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(20.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(9.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(9.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![],
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2758,54 +2861,54 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let multiple_order_packet = MultipleOrderPacket::new_default(
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(5.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(5.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(4.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(4.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(3.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(3.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(5.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(5.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
             CondensedOrder::new_default(
                 //this order is all of the extra quote lots we need to deposit
-                sdk.float_price_to_ticks(4.0),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(4.0),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             ),
         ],
         vec![
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0),
-                sdk.raw_base_units_to_base_lots(5.0),
+                meta.float_price_to_ticks_rounded_down(100.0),
+                meta.raw_base_units_to_base_lots_rounded_down(5.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(105.0),
-                sdk.raw_base_units_to_base_lots(5.0),
+                meta.float_price_to_ticks_rounded_down(105.0),
+                meta.raw_base_units_to_base_lots_rounded_down(5.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0),
-                sdk.raw_base_units_to_base_lots(5.0),
+                meta.float_price_to_ticks_rounded_down(100.0),
+                meta.raw_base_units_to_base_lots_rounded_down(5.0),
             ),
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(103.0),
-                sdk.raw_base_units_to_base_lots(5.0),
+                meta.float_price_to_ticks_rounded_down(103.0),
+                meta.raw_base_units_to_base_lots_rounded_down(5.0),
             ),
             CondensedOrder::new_default(
                 //this order is all of the extra base lots we need to deposit
-                sdk.float_price_to_ticks(102.0),
-                sdk.raw_base_units_to_base_lots(5.0),
+                meta.float_price_to_ticks_rounded_down(102.0),
+                meta.raw_base_units_to_base_lots_rounded_down(5.0),
             ),
         ],
     );
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2829,20 +2932,16 @@ async fn test_phoenix_place_multiple_limit_orders() {
     ctx.warp_to_slot(3).unwrap();
 
     // Cancel orders for both makers to return the orderbook to empty
-    let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
-        &default_maker.user.pubkey(),
-    );
+    let cancel_order_ix =
+        create_cancel_all_order_with_free_funds_instruction(market, &default_maker.user.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![cancel_order_ix], vec![&default_maker.user])
         .await
         .unwrap();
 
-    let cancel_order_ix = create_cancel_all_order_with_free_funds_instruction(
-        &sdk.core.active_market_key,
-        &second_maker.user.pubkey(),
-    );
+    let cancel_order_ix =
+        create_cancel_all_order_with_free_funds_instruction(market, &second_maker.user.pubkey());
 
     sdk.client
         .sign_send_instructions(vec![cancel_order_ix], vec![&second_maker.user])
@@ -2853,16 +2952,16 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let bids = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(100.0 - (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
     let asks = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(100.0 + (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
@@ -2873,7 +2972,7 @@ async fn test_phoenix_place_multiple_limit_orders() {
     assert_eq!(byte_len, 766);
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2895,22 +2994,22 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(101.0 - (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
     let asks = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(99.0 + (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &second_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2927,22 +3026,22 @@ async fn test_phoenix_place_multiple_limit_orders() {
     let bids = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(101.0 - (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(101.0 - (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
     let asks = (1..30)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(99.0 + (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(10.0),
+                meta.float_price_to_ticks_rounded_down(99.0 + (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(10.0),
             )
         })
         .collect::<Vec<_>>();
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &second_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -2957,6 +3056,8 @@ async fn test_phoenix_place_multiple_limit_orders() {
 
 #[allow(clippy::too_many_arguments)]
 async fn layer_orders(
+    meta: &MarketMetadata,
+    market: &Pubkey,
     sdk: &SDKClient,
     start_price: u64,
     end_price: u64,
@@ -2992,12 +3093,11 @@ async fn layer_orders(
             }
         }
     }
-    let meta = sdk.get_active_market_metadata();
     let mut ixs = vec![];
     for (p, s) in prices.iter().zip(sizes.iter()) {
         let params = OrderPacket::new_limit_order_default(side, *p, *s);
         let new_order_ix = create_new_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &sdk.get_trader(),
             &meta.base_mint,
             &meta.quote_mint,
@@ -3067,34 +3167,41 @@ async fn test_phoenix_log_authorization() {
 
 #[tokio::test]
 async fn test_phoenix_cancel_all_memory_management() {
-    let (PhoenixTestClient { mut sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
 
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
     let PhoenixTestContext { default_maker, .. } = &phoenix_ctx;
 
     sdk.set_payer(clone_keypair(&default_maker.user));
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(40.0),
-        sdk.float_price_to_ticks(38.0),
-        sdk.float_price_to_ticks(0.01),
-        sdk.raw_base_units_to_base_lots(1.0),
-        sdk.raw_base_units_to_base_lots(0.0),
+        meta.float_price_to_ticks_rounded_down(40.0),
+        meta.float_price_to_ticks_rounded_down(38.0),
+        meta.float_price_to_ticks_rounded_down(0.01),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(0.0),
         Side::Bid,
     )
     .await;
 
     layer_orders(
+        meta,
+        market,
         &sdk,
-        sdk.float_price_to_ticks(40.01),
-        sdk.float_price_to_ticks(42.0),
-        sdk.float_price_to_ticks(0.01),
-        sdk.raw_base_units_to_base_lots(1.0),
-        sdk.raw_base_units_to_base_lots(0.0),
+        meta.float_price_to_ticks_rounded_down(40.01),
+        meta.float_price_to_ticks_rounded_down(42.0),
+        meta.float_price_to_ticks_rounded_down(0.01),
+        meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(0.0),
         Side::Ask,
     )
     .await;
 
-    let ix = sdk.get_cancel_all_ix();
+    let ix = sdk.get_cancel_all_ix(market).unwrap();
     sdk.client
         .sign_send_instructions(
             vec![
@@ -3109,27 +3216,32 @@ async fn test_phoenix_cancel_all_memory_management() {
 
 #[tokio::test]
 async fn test_phoenix_place_multiple_memory_management() {
-    let (PhoenixTestClient { sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
+    let (client, phoenix_ctx) = bootstrap_default(0).await;
 
     let PhoenixTestContext {
         default_maker,
         default_taker,
         ..
     } = &phoenix_ctx;
+
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &client;
+
     // Send 21 orders on each side to verify there is enough compute to do so (this is the upper bound due to the transaction size)
     let bids = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0 - (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(1.0),
+                meta.float_price_to_ticks_rounded_down(100.0 - (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(1.0),
             )
         })
         .collect::<Vec<_>>();
     let asks = (1..22)
         .map(|i| {
             CondensedOrder::new_default(
-                sdk.float_price_to_ticks(100.0 + (i as f64 * 0.1)),
-                sdk.raw_base_units_to_base_lots(1.0),
+                meta.float_price_to_ticks_rounded_down(100.0 + (i as f64 * 0.1)),
+                meta.raw_base_units_to_base_lots_rounded_down(1.0),
             )
         })
         .collect::<Vec<_>>();
@@ -3137,10 +3249,10 @@ async fn test_phoenix_place_multiple_memory_management() {
     let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
 
     let new_order_ix = create_new_multiple_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &multiple_order_packet,
     );
 
@@ -3160,10 +3272,10 @@ async fn test_phoenix_place_multiple_memory_management() {
             vec![
                 ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
                 create_new_order_instruction(
-                    &sdk.active_market_key,
+                    market,
                     &default_taker.user.pubkey(),
-                    &sdk.base_mint,
-                    &sdk.quote_mint,
+                    &meta.base_mint,
+                    &meta.quote_mint,
                     &OrderPacket::new_ioc_by_lots(
                         Side::Ask,
                         0,
@@ -3183,7 +3295,7 @@ async fn test_phoenix_place_multiple_memory_management() {
 
 #[tokio::test]
 async fn test_phoenix_place_multiple_limit_orders_adversarial() {
-    let (PhoenixTestClient { mut sdk, .. }, phoenix_ctx) = bootstrap_default(0).await;
+    let (mut phoenix_test_client, phoenix_ctx) = bootstrap_default(0).await;
 
     let PhoenixTestContext {
         default_maker,
@@ -3191,7 +3303,10 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
         ..
     } = &phoenix_ctx;
 
-    let meta = *sdk.get_active_market_metadata();
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut phoenix_test_client;
+
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
@@ -3202,16 +3317,16 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
     // Stuff the book with 1 lots
     loop {
         let bids = (start..start + 30)
-            .map(|_| CondensedOrder::new_default(sdk.float_price_to_ticks(99.0), 1))
+            .map(|_| CondensedOrder::new_default(meta.float_price_to_ticks_rounded_down(99.0), 1))
             .collect::<Vec<_>>();
         let asks = (start..start + 30)
-            .map(|_| CondensedOrder::new_default(sdk.float_price_to_ticks(100.0), 1))
+            .map(|_| CondensedOrder::new_default(meta.float_price_to_ticks_rounded_down(100.0), 1))
             .collect::<Vec<_>>();
 
         let multiple_order_packet = MultipleOrderPacket::new_default(bids, asks);
 
         let new_order_ix = create_new_multiple_order_instruction(
-            &sdk.core.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3239,7 +3354,7 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
     sdk.set_payer(clone_keypair(&default_taker.user));
     let order_packet = OrderPacket::new_ioc_by_lots(
         Side::Bid,
-        sdk.float_price_to_ticks(101.0),
+        meta.float_price_to_ticks_rounded_down(101.0),
         700,
         SelfTradeBehavior::Abort,
         None,
@@ -3247,10 +3362,10 @@ async fn test_phoenix_place_multiple_limit_orders_adversarial() {
         false,
     );
     let ix = create_new_order_instruction(
-        &sdk.active_market_key,
+        market,
         &default_taker.user.pubkey(),
-        &sdk.base_mint,
-        &sdk.quote_mint,
+        &meta.base_mint,
+        &meta.quote_mint,
         &order_packet,
     );
 
@@ -3269,7 +3384,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     let tick_size_in_quote_lots_per_base_unit = 10; // base_unit is BaseUnit (adjusted)
     let base_lot_per_base_unit = 10; // base_unit is BaseUnit (adjusted)
 
-    let (PhoenixTestClient { mut sdk, .. }, ctx) = bootstrap_with_parameters(
+    let (mut client, ctx) = bootstrap_with_parameters(
         1_000_000,
         base_lot_per_base_unit,
         tick_size_in_quote_lots_per_base_unit,
@@ -3285,10 +3400,14 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         ..
     } = &ctx;
 
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
+
     mint_tokens(
         &sdk.client,
         &ctx.mint_authority,
-        &sdk.base_mint,
+        &meta.base_mint,
         &default_maker.base_ata,
         1_000_000 * 1e12 as u64,
         None,
@@ -3299,7 +3418,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     mint_tokens(
         &sdk.client,
         &ctx.mint_authority,
-        &sdk.quote_mint,
+        &meta.quote_mint,
         &default_maker.quote_ata,
         1_000_000 * 1e9 as u64,
         None,
@@ -3307,7 +3426,6 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     .await
     .unwrap();
 
-    let meta = *sdk.get_active_market_metadata();
     let quote_mint = &meta.quote_mint;
     let base_mint = &meta.base_mint;
 
@@ -3321,26 +3439,26 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     for (bid_price, ask_price) in bid_price_range.iter().zip(ask_price_range.iter()) {
         let bid_params = OrderPacket::new_limit_order(
             Side::Bid,
-            sdk.float_price_to_ticks(*bid_price),
-            sdk.raw_base_units_to_base_lots(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
+            meta.float_price_to_ticks_rounded_down(*bid_price),
+            meta.raw_base_units_to_base_lots_rounded_down(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
             SelfTradeBehavior::Abort,
             None,
-            sdk.get_next_client_order_id(),
+            0,
             false,
         );
 
         let ask_params = OrderPacket::new_limit_order(
             Side::Ask,
-            sdk.float_price_to_ticks(*ask_price),
-            sdk.raw_base_units_to_base_lots(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
+            meta.float_price_to_ticks_rounded_down(*ask_price),
+            meta.raw_base_units_to_base_lots_rounded_down(1000_f64), // 1_000 tokens, or 1_000 raw_base_units
             SelfTradeBehavior::Abort,
             None,
-            sdk.get_next_client_order_id(),
+            0,
             false,
         );
 
         let bid_ix = create_new_order_instruction(
-            &sdk.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3348,7 +3466,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         );
 
         let ask_ix = create_new_order_instruction(
-            &sdk.active_market_key,
+            market,
             &default_maker.user.pubkey(),
             base_mint,
             quote_mint,
@@ -3364,10 +3482,12 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         .await
         .unwrap();
 
-    let first_cross_price = sdk.float_price_to_ticks(*bid_price_range.last().unwrap());
-    let first_cross_size = sdk.raw_base_units_to_base_lots(1000_f64);
-    let second_cross_price = sdk.float_price_to_ticks(*bid_price_range.first().unwrap()); // Takes the last price in the bid price_range (40.0)
-    let second_cross_size = sdk.raw_base_units_to_base_lots(1000_f64);
+    let first_cross_price =
+        meta.float_price_to_ticks_rounded_down(*bid_price_range.last().unwrap());
+    let first_cross_size = meta.raw_base_units_to_base_lots_rounded_down(1000_f64);
+    let second_cross_price =
+        meta.float_price_to_ticks_rounded_down(*bid_price_range.first().unwrap()); // Takes the last price in the bid price_range (40.0)
+    let second_cross_size = meta.raw_base_units_to_base_lots_rounded_down(1000_f64);
 
     let params = OrderPacket::new_ioc_by_lots(
         Side::Ask,
@@ -3375,24 +3495,24 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
         first_cross_size + second_cross_size,
         SelfTradeBehavior::Abort,
         None,
-        sdk.get_next_client_order_id(),
+        19082332,
         false,
     );
 
     sdk.set_payer(clone_keypair(&default_taker.user));
     let base_start = get_token_balance(&sdk.client, default_taker.base_ata).await;
     let quote_start = get_token_balance(&sdk.client, default_taker.quote_ata).await;
-    let base_lot_size = &sdk.base_lot_size;
+    let base_lot_size = &meta.base_atoms_per_base_lot;
     println!("base_lot_size: {}", base_lot_size);
-    let quote_lot_size = &sdk.quote_lot_size;
+    let quote_lot_size = &meta.quote_atoms_per_quote_lot;
     println!("quote_lot_size: {}", quote_lot_size);
     println!(
         "base_lots per base_unit: {}",
-        &sdk.num_base_lots_per_base_unit
+        &meta.num_base_lots_per_base_unit
     );
 
     let new_order_ix = create_new_order_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_taker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -3422,7 +3542,7 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     let quote_start = get_token_balance(&sdk.client, default_maker.quote_ata).await;
 
     let withdraw_ix = create_withdraw_funds_instruction(
-        &sdk.core.active_market_key,
+        market,
         &default_maker.user.pubkey(),
         base_mint,
         quote_mint,
@@ -3438,5 +3558,272 @@ async fn test_phoenix_basic_with_raw_base_unit_adjustment() {
     assert_eq!(
         base_end - base_start,
         first_cross_size * base_lot_size + second_cross_size * base_lot_size
+    );
+}
+
+#[tokio::test]
+async fn test_phoenix_place_order_quiet_failure() {
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
+
+    // 100 SOL, 1_000 USDC
+    let maker = get_new_maker(&client, &phoenix_ctx, 100, 1_000).await;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
+
+    let quote_mint = &meta.quote_mint;
+    let base_mint = &meta.base_mint;
+
+    sdk.set_payer(clone_keypair(&maker.user));
+
+    let base_balance_start = get_token_balance(&sdk.client, maker.base_ata).await;
+    let quote_balance_start = get_token_balance(&sdk.client, maker.quote_ata).await;
+    println!("Base balance start: {}", base_balance_start);
+    println!("Quote balance start: {}", quote_balance_start);
+
+    println!("Depositing 3 SOL and 3 USDC");
+    let deposit_ix = create_deposit_funds_instruction(
+        market,
+        &maker.user.pubkey(),
+        &meta.base_mint,
+        &meta.quote_mint,
+        &DepositParams {
+            quote_lots_to_deposit: meta.quote_units_to_quote_lots(3.0),
+            base_lots_to_deposit: meta.raw_base_units_to_base_lots_rounded_down(3.0),
+        },
+    );
+    sdk.client
+        .sign_send_instructions(vec![deposit_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    println!("Placing ask order for 97 SOL (deposited funds + tokens)");
+    let params = OrderPacket::new_limit_order(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(97_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let base_balance = get_token_balance(&sdk.client, maker.base_ata).await;
+    assert_eq!(base_balance, 3e9 as u64, "Order failed to deposit 97 SOL");
+
+    println!("Placing ask order for 1 SOL");
+    let params = OrderPacket::new_limit_order(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    println!("Placing ask order (using only deposited funds) for 1 SOL");
+
+    let deposit_ix = create_deposit_funds_instruction(
+        market,
+        &maker.user.pubkey(),
+        &meta.base_mint,
+        &meta.quote_mint,
+        &DepositParams {
+            quote_lots_to_deposit: 0,
+            base_lots_to_deposit: meta.raw_base_units_to_base_lots_rounded_down(1.0),
+        },
+    );
+    let params = OrderPacket::new_limit_order(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        true,
+    );
+    let new_order_ix =
+        create_new_order_with_free_funds_instruction(market, &maker.user.pubkey(), &params);
+
+    sdk.client
+        .sign_send_instructions(vec![deposit_ix, new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let market_start = sdk.get_market_orderbook(market).await.unwrap();
+    assert_eq!(market_start.asks.len(), 3);
+
+    // This order should fail silently
+    let params = OrderPacket::new_limit_order(
+        Side::Ask,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(2_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let market_end = sdk.get_market_orderbook(market).await.unwrap();
+    assert_eq!(
+        market_start.asks.len(),
+        market_end.asks.len(),
+        "Order should have failed silently"
+    );
+
+    println!("Cancelling all orders");
+    sdk.client
+        .sign_send_instructions(
+            vec![sdk.get_cancel_all_ix(market).unwrap()],
+            vec![&maker.user],
+        )
+        .await
+        .unwrap();
+
+    let base_balance_end = get_token_balance(&sdk.client, maker.base_ata).await;
+    assert_eq!(
+        base_balance_start, base_balance_end as u64,
+        "Balances should not change"
+    );
+
+    println!("Placing bid order for 997 USDC (deposited funds + tokens)");
+    let params = OrderPacket::new_limit_order(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(99.7_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let quote_balance = get_token_balance(&sdk.client, maker.quote_ata).await;
+    assert_eq!(
+        quote_balance, 3e6 as u64,
+        "Order failed to deposit 997 USDC"
+    );
+
+    println!("Placing bid order for 1 USDC");
+    let params = OrderPacket::new_limit_order(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    println!("Placing bid order (using only deposited funds) for 1 USDC");
+    let deposit_ix = create_deposit_funds_instruction(
+        market,
+        &maker.user.pubkey(),
+        &meta.base_mint,
+        &meta.quote_mint,
+        &DepositParams {
+            quote_lots_to_deposit: meta.quote_units_to_quote_lots(1.0),
+            base_lots_to_deposit: 0,
+        },
+    );
+
+    let params = OrderPacket::new_limit_order(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(1.0),
+        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        true,
+    );
+    let new_order_ix =
+        create_new_order_with_free_funds_instruction(market, &maker.user.pubkey(), &params);
+
+    sdk.client
+        .sign_send_instructions(vec![deposit_ix, new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let market_start = sdk.get_market_orderbook(market).await.unwrap();
+    assert_eq!(market_start.bids.len(), 3);
+
+    // This order should fail silently
+    let params = OrderPacket::new_limit_order(
+        Side::Bid,
+        meta.float_price_to_ticks_rounded_down(10.0),
+        meta.raw_base_units_to_base_lots_rounded_down(2_f64),
+        SelfTradeBehavior::Abort,
+        None,
+        0,
+        false,
+    );
+
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    sdk.client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let market_end = sdk.get_market_orderbook(market).await.unwrap();
+
+    assert_eq!(
+        market_start.bids.len(),
+        market_end.bids.len(),
+        "Order should have failed silently"
+    );
+
+    println!("Cancelling all orders");
+    sdk.client
+        .sign_send_instructions(
+            vec![sdk.get_cancel_all_ix(market).unwrap()],
+            vec![&maker.user],
+        )
+        .await
+        .unwrap();
+
+    let quote_balance_end = get_token_balance(&sdk.client, maker.quote_ata).await;
+    assert_eq!(
+        quote_balance_start, quote_balance_end,
+        "Balances should not change"
     );
 }

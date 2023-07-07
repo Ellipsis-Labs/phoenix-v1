@@ -325,6 +325,58 @@ fn process_new_order<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
+
+        // If the trader does not have sufficient funds to place the order, return silently without mutating the book.
+        if !order_packet.is_take_only() {
+            let trader_index = market
+                .get_trader_index(trader.key)
+                .ok_or(PhoenixError::TraderNotFound)?;
+            let quote_lots_free = market
+                .get_trader_state_from_index(trader_index)
+                .quote_lots_free;
+            let base_lots_free = market
+                .get_trader_state_from_index(trader_index)
+                .base_lots_free;
+            let (quote_lots_available, base_lots_available) = match vault_context.as_ref() {
+                None => (quote_lots_free, base_lots_free),
+                Some(vc) => {
+                    let quote_account_atoms = vc.quote_account.amount().map(QuoteAtoms::new)?;
+                    let base_account_atoms = vc.base_account.amount().map(BaseAtoms::new)?;
+                    (
+                        quote_lots_free + quote_account_atoms.unchecked_div(quote_lot_size),
+                        base_lots_free + base_account_atoms.unchecked_div(base_lot_size),
+                    )
+                }
+            };
+            match side {
+                Side::Ask => {
+                    if base_lots_available < order_packet.num_base_lots() {
+                        phoenix_log!(
+                            "Insufficient funds to place order: {} base lots available, {} base lots requested",
+                            base_lots_available,
+                            order_packet.num_base_lots()
+                        );
+                        return Ok(());
+                    }
+                }
+                Side::Bid => {
+                    let quote_lots_required = order_packet.get_price_in_ticks()
+                        * market.get_tick_size()
+                        * order_packet.num_base_lots()
+                        / market.get_base_lots_per_base_unit();
+
+                    if quote_lots_available < quote_lots_required {
+                        phoenix_log!(
+                            "Insufficient funds to place order: {} quote lots available, {} quote lots requested",
+                            quote_lots_available,
+                            quote_lots_required
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         let (order_id, matching_engine_response) = market
             .place_order(
                 trader.key,
