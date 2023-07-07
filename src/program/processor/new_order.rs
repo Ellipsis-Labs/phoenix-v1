@@ -327,7 +327,7 @@ fn process_new_order<'a, 'info>(
         let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
 
         // If the trader does not have sufficient funds to place the order, return silently without mutating the book.
-        if !order_packet.is_take_only() {
+        if order_packet.fail_silently_on_insufficient_funds() {
             let trader_index = market
                 .get_trader_index(trader.key)
                 .ok_or(PhoenixError::TraderNotFound)?;
@@ -541,6 +541,7 @@ fn process_multiple_new_orders<'a, 'info>(
                     use_only_deposited_funds: no_deposit,
                     last_valid_slot,
                     last_valid_unix_timestamp_in_seconds,
+                    fail_silently_on_insufficient_funds: false,
                 };
 
                 let matching_engine_response = {

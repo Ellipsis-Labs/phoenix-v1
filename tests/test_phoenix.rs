@@ -7,6 +7,7 @@ use phoenix::program::instruction_builders::*;
 use phoenix::program::new_order::CondensedOrder;
 use phoenix::program::new_order::MultipleOrderPacket;
 use phoenix::program::MarketHeader;
+use phoenix::quantities::Ticks;
 use phoenix::quantities::WrapperU64;
 use phoenix::quantities::{BaseLots, QuoteLots};
 use phoenix_sdk::sdk_client::MarketEventDetails;
@@ -3598,15 +3599,18 @@ async fn test_phoenix_place_order_quiet_failure() {
         .unwrap();
 
     println!("Placing ask order for 97 SOL (deposited funds + tokens)");
-    let params = OrderPacket::new_limit_order(
-        Side::Ask,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(97_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+    let params = OrderPacket::Limit {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(97_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
 
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
@@ -3620,15 +3624,18 @@ async fn test_phoenix_place_order_quiet_failure() {
     assert_eq!(base_balance, 3e9 as u64, "Order failed to deposit 97 SOL");
 
     println!("Placing ask order for 1 SOL");
-    let params = OrderPacket::new_limit_order(
-        Side::Ask,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+    let params = OrderPacket::Limit {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
 
@@ -3649,15 +3656,19 @@ async fn test_phoenix_place_order_quiet_failure() {
             base_lots_to_deposit: meta.raw_base_units_to_base_lots_rounded_down(1.0),
         },
     );
-    let params = OrderPacket::new_limit_order(
-        Side::Ask,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        true,
-    );
+
+    let params = OrderPacket::Limit {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: true,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
     let new_order_ix =
         create_new_order_with_free_funds_instruction(market, &maker.user.pubkey(), &params);
 
@@ -3670,15 +3681,18 @@ async fn test_phoenix_place_order_quiet_failure() {
     assert_eq!(market_start.asks.len(), 3);
 
     // This order should fail silently
-    let params = OrderPacket::new_limit_order(
-        Side::Ask,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(2_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+    let params = OrderPacket::Limit {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(2_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
 
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
@@ -3711,15 +3725,19 @@ async fn test_phoenix_place_order_quiet_failure() {
     );
 
     println!("Placing bid order for 997 USDC (deposited funds + tokens)");
-    let params = OrderPacket::new_limit_order(
-        Side::Bid,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(99.7_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+
+    let params = OrderPacket::Limit {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(99.7_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
 
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
@@ -3736,15 +3754,20 @@ async fn test_phoenix_place_order_quiet_failure() {
     );
 
     println!("Placing bid order for 1 USDC");
-    let params = OrderPacket::new_limit_order(
-        Side::Bid,
-        meta.float_price_to_ticks_rounded_down(1.0),
-        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+
+    let params = OrderPacket::Limit {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(1.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
+
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
 
@@ -3765,15 +3788,18 @@ async fn test_phoenix_place_order_quiet_failure() {
         },
     );
 
-    let params = OrderPacket::new_limit_order(
-        Side::Bid,
-        meta.float_price_to_ticks_rounded_down(1.0),
-        meta.raw_base_units_to_base_lots_rounded_down(1_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        true,
-    );
+    let params = OrderPacket::Limit {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(1.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: true,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
     let new_order_ix =
         create_new_order_with_free_funds_instruction(market, &maker.user.pubkey(), &params);
 
@@ -3786,15 +3812,18 @@ async fn test_phoenix_place_order_quiet_failure() {
     assert_eq!(market_start.bids.len(), 3);
 
     // This order should fail silently
-    let params = OrderPacket::new_limit_order(
-        Side::Bid,
-        meta.float_price_to_ticks_rounded_down(10.0),
-        meta.raw_base_units_to_base_lots_rounded_down(2_f64),
-        SelfTradeBehavior::Abort,
-        None,
-        0,
-        false,
-    );
+    let params = OrderPacket::Limit {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(2_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: true,
+    };
 
     let new_order_ix =
         create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);

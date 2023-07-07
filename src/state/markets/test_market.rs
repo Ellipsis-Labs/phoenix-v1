@@ -1965,6 +1965,7 @@ fn test_sell_with_quote_lot_budget() {
                 self_trade_behavior: SelfTradeBehavior::Abort,
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
+                _padding: 0,
             },
             &mut record_event_fn,
             &mut get_clock_fn,
@@ -1989,6 +1990,7 @@ fn test_sell_with_quote_lot_budget() {
                 self_trade_behavior: SelfTradeBehavior::Abort,
                 last_valid_slot: None,
                 last_valid_unix_timestamp_in_seconds: None,
+                _padding: 0,
             },
             &mut record_event_fn,
             &mut get_clock_fn,
@@ -2352,6 +2354,7 @@ fn test_tif() {
         reject_post_only: true,
         last_valid_slot: None,
         last_valid_unix_timestamp_in_seconds: Some(exp),
+        fail_silently_on_insufficient_funds: false,
     };
 
     let order_packet_slot_tif = OrderPacket::PostOnly {
@@ -2363,6 +2366,7 @@ fn test_tif() {
         reject_post_only: true,
         last_valid_slot: Some(2000),
         last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
     };
 
     for order_packet in [order_packet_unix_timestamp_tif, order_packet_slot_tif] {
@@ -2575,7 +2579,8 @@ fn test_limit_order_crossing() {
                 client_order_id: rng.gen::<u128>(),
                 use_only_deposited_funds: false,
                 last_valid_slot: None,
-                last_valid_unix_timestamp_in_seconds: None
+                last_valid_unix_timestamp_in_seconds: None,
+                fail_silently_on_insufficient_funds: false
             },
             &mut record_event_fn,
             &mut get_clock_fn,
