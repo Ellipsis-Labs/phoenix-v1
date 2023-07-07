@@ -2642,7 +2642,7 @@ dependencies = [
  "num-traits",
  "phoenix-sdk-core",
  "phoenix-seat-manager",
- "phoenix-v1 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "phoenix-v1 0.2.3",
  "rand 0.7.3",
  "rust_decimal",
  "rust_decimal_macros",
@@ -2668,7 +2668,7 @@ dependencies = [
  "ellipsis-transaction-utils",
  "itertools",
  "num-traits",
- "phoenix-v1 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "phoenix-v1 0.2.3",
  "rand 0.7.3",
  "rust_decimal",
  "rust_decimal_macros",
@@ -2689,7 +2689,7 @@ dependencies = [
  "itertools",
  "lib-sokoban",
  "num_enum",
- "phoenix-v1 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "phoenix-v1 0.2.3",
  "shank",
  "solana-program",
  "solana-security-txt",
@@ -2697,30 +2697,6 @@ dependencies = [
  "spl-token",
  "static_assertions",
  "thiserror",
-]
-
-[[package]]
-name = "phoenix-v1"
-version = "0.2.3"
-dependencies = [
- "borsh 0.9.3",
- "bytemuck",
- "ellipsis-client",
- "ellipsis-macros",
- "itertools",
- "lib-sokoban",
- "num_enum",
- "phoenix-sdk",
- "rand 0.7.3",
- "shank",
- "solana-program",
- "solana-sdk",
- "solana-security-txt",
- "spl-associated-token-account",
- "spl-token",
- "static_assertions",
- "thiserror",
- "tokio",
 ]
 
 [[package]]
@@ -2742,6 +2718,30 @@ dependencies = [
  "spl-token",
  "static_assertions",
  "thiserror",
+]
+
+[[package]]
+name = "phoenix-v1"
+version = "0.2.4"
+dependencies = [
+ "borsh 0.9.3",
+ "bytemuck",
+ "ellipsis-client",
+ "ellipsis-macros",
+ "itertools",
+ "lib-sokoban",
+ "num_enum",
+ "phoenix-sdk",
+ "rand 0.7.3",
+ "shank",
+ "solana-program",
+ "solana-sdk",
+ "solana-security-txt",
+ "spl-associated-token-account",
+ "spl-token",
+ "static_assertions",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
