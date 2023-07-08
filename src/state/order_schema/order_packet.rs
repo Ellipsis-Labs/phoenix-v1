@@ -673,47 +673,34 @@ impl OrderPacket {
 }
 
 pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
-    // First, attempt to decode the order packet with the raw input data.
-    let order_packet = match OrderPacket::try_from_slice(bytes) {
-        Ok(order_packet) => order_packet,
-        Err(_) => {
-            // If the order packet fails to decode, we attempt to decode it again with the assumption
-            // that the TIF fields are present but the `fail_silently_on_insufficient_funds` field is missing.
-            // The data is then padded with a 0 byte (false) to account for the missing field.
-            let padded_bytes = [bytes, &[0_u8 /* fail_silently_on_insufficient_funds */]].concat();
-            let order_packet = match OrderPacket::try_from_slice(&padded_bytes) {
-                Ok(order_packet) => order_packet,
-                Err(_) => {
-                    // If the input data is also missing the `last_valid_slot` and `last_valid_unix_timestamp_in_seconds`
-                    // fields on the order packet, this function infers these parameters to be None and tries
-                    // to decode the order packet again.
-                    //
-                    // Options with a None value are encoded with a 0 byte.
-                    let padded_bytes = [
-                        bytes,
-                        &[
-                            0_u8, /* last_valid_slot */
-                            0_u8, /* last_valid_unix_timestamp_in_seconds */
-                            0_u8, /* fail_silently_on_insufficient_funds */
-                        ],
-                    ]
-                    .concat();
-                    let order_packet = OrderPacket::try_from_slice(&padded_bytes).ok()?;
-                    order_packet
-                }
-            };
+    // The optional fields at the end of the order packet are not required in the raw input data.
+    let additional_fields = &[
+        0_u8, /* last_valid_slot */
+        0_u8, /* last_valid_unix_timestamp_in_seconds */
+        0_u8, /* fail_silently_on_insufficient_funds */
+    ];
 
-            if order_packet.get_last_valid_slot().is_some()
-                || order_packet
-                    .get_last_valid_unix_timestamp_in_seconds()
-                    .is_some()
-            {
-                return None;
+    // First, attempt to decode the order packet with the raw input data.
+    match OrderPacket::try_from_slice(bytes) {
+        Ok(order_packet) => Some(order_packet),
+        // If the initial deserialization fails, the strategy is to decode the order packet with the
+        // starting assumption that none of the optional fields are present.
+        //
+        // The original input data is padded with all of the optional fields at the end.
+        // Each field is then removed one at a time in order until the order packet successfully decodes.
+        // The requirement here is that the included optional fields must be contiguous in memory
+        // (i.e. it is undefined behavior to include non-adjacent optional fields while excluding the ones in between)
+        Err(_) => {
+            let mut padded_bytes = [bytes, additional_fields].concat();
+            for _ in 0..additional_fields.len() {
+                if let Ok(order_packet) = OrderPacket::try_from_slice(&padded_bytes) {
+                    return Some(order_packet);
+                }
+                padded_bytes.pop();
             }
-            order_packet
+            None
         }
-    };
-    Some(order_packet)
+    }
 }
 
 #[test]
