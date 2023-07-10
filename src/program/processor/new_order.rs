@@ -339,9 +339,9 @@ fn process_new_order<'a, 'info>(
                 .base_lots_free;
             let (quote_lots_available, base_lots_available) = match vault_context.as_ref() {
                 None => (quote_lots_free, base_lots_free),
-                Some(vc) => {
-                    let quote_account_atoms = vc.quote_account.amount().map(QuoteAtoms::new)?;
-                    let base_account_atoms = vc.base_account.amount().map(BaseAtoms::new)?;
+                Some(ctx) => {
+                    let quote_account_atoms = ctx.quote_account.amount().map(QuoteAtoms::new)?;
+                    let base_account_atoms = ctx.base_account.amount().map(BaseAtoms::new)?;
                     (
                         quote_lots_free + quote_account_atoms.unchecked_div(quote_lot_size),
                         base_lots_free + base_account_atoms.unchecked_div(base_lot_size),

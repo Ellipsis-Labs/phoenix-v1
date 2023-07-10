@@ -139,7 +139,8 @@ pub enum OrderPacket {
         /// If this is set, the order will be invalid after the specified unix timestamp
         last_valid_unix_timestamp_in_seconds: Option<u64>,
 
-        /// Padding to help with deserialization
+        /// The PostOnly and Limit variants have a flag at this position to fail silently on insufficient funds. This
+        /// padding field is used to help with uniformly deserializing the enum.
         _padding: u8,
     },
 }
