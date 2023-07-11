@@ -141,6 +141,28 @@ pub trait Market<
         TypedLadder { bids, asks }
     }
 
+    fn get_top_of_book(
+        &self,
+        side: Side,
+        last_valid_slot: u64,
+        last_valid_unix_timestamp_in_seconds: u64,
+    ) -> Ticks {
+        self.get_book(side)
+            .iter()
+            .filter_map(|(order_id, resting_order)| {
+                if resting_order.is_expired(last_valid_slot, last_valid_unix_timestamp_in_seconds) {
+                    None
+                } else {
+                    Some(Ticks::new(order_id.price_in_ticks()))
+                }
+            })
+            .next()
+            .unwrap_or(match side {
+                Side::Bid => Ticks::ZERO,
+                Side::Ask => Ticks::MAX,
+            })
+    }
+
     fn get_taker_fee_bps(&self) -> u64;
     fn get_tick_size(&self) -> QuoteLotsPerBaseUnitPerTick;
     fn get_base_lots_per_base_unit(&self) -> BaseLotsPerBaseUnit;

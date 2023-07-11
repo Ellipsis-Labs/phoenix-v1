@@ -1984,8 +1984,10 @@
             }
           },
           {
-            "name": "rejectPostOnly",
-            "type": "bool"
+            "name": "failedMultipleLimitOrderBehavior",
+            "type": {
+              "defined": "FailedMultipleLimitOrderBehavior"
+            }
           }
         ]
       }
@@ -2254,6 +2256,26 @@
                 "defined": "ExpiredOrderEvent"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "FailedMultipleLimitOrderBehavior",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "AmendOnCross"
+          },
+          {
+            "name": "RejectPostOnly"
+          },
+          {
+            "name": "FailSilentlyAndAmend"
+          },
+          {
+            "name": "FailSilentlyAndRejectCrossingOrders"
           }
         ]
       }

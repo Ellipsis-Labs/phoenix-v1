@@ -7,10 +7,13 @@ use crate::{
         token_utils::{maybe_invoke_deposit, maybe_invoke_withdraw},
         MarketHeader, PhoenixMarketContext, PhoenixVaultContext,
     },
-    quantities::{BaseAtoms, BaseLots, QuoteAtoms, QuoteLots, Ticks, WrapperU64},
+    quantities::{
+        BaseAtoms, BaseAtomsPerBaseLot, BaseLots, QuoteAtoms, QuoteAtomsPerQuoteLot, QuoteLots,
+        Ticks, WrapperU64,
+    },
     state::{
         decode_order_packet,
-        markets::{FIFOOrderId, MarketEvent},
+        markets::{FIFOOrderId, FIFORestingOrder, MarketEvent, MarketWrapperMut},
         OrderPacket, OrderPacketMetadata, Side,
     },
 };
@@ -22,6 +25,49 @@ use solana_program::{
 };
 use std::mem::size_of;
 
+#[derive(BorshDeserialize, BorshSerialize, Debug)]
+pub enum FailedMultipleLimitOrderBehavior {
+    /// Orders will never cross the spread. Instead they will be amended to the closest non-crossing price.
+    /// The entire transaction will fail if matching engine returns None for any order, which indicates an error.
+    AmendOnCross,
+
+    /// If any order crosses the spread, the entire transaction will fail.
+    RejectPostOnly,
+
+    /// Orders will be skipped if the user has insufficient funds.
+    /// Crossing orders will be amended to the closest non-crossing price.
+    FailSilentlyAndAmend,
+
+    /// Orders will be skipped if the user has insufficient funds.
+    /// Crossing orders will be skipped.
+    FailSilentlyAndRejectCrossingOrders,
+}
+
+impl FailedMultipleLimitOrderBehavior {
+    pub fn should_reject_post_only(&self) -> bool {
+        matches!(
+            self,
+            FailedMultipleLimitOrderBehavior::RejectPostOnly
+                | FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
+        )
+    }
+
+    pub fn should_check_for_insufficient_funds(&self) -> bool {
+        matches!(
+            self,
+            FailedMultipleLimitOrderBehavior::FailSilentlyAndAmend
+                | FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
+        )
+    }
+
+    pub fn should_check_for_crossing_orders(&self) -> bool {
+        matches!(
+            self,
+            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
+        )
+    }
+}
+
 /// Struct to send a vector of bids and asks as PostOnly orders in a single packet.
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
 pub struct MultipleOrderPacket {
@@ -29,10 +75,10 @@ pub struct MultipleOrderPacket {
     pub bids: Vec<CondensedOrder>,
     pub asks: Vec<CondensedOrder>,
     pub client_order_id: Option<u128>,
-    pub reject_post_only: bool,
+    pub failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
 pub struct CondensedOrder {
     pub price_in_ticks: u64,
     pub size_in_base_lots: u64,
@@ -62,7 +108,11 @@ impl MultipleOrderPacket {
             bids,
             asks,
             client_order_id,
-            reject_post_only,
+            failed_multiple_limit_order_behavior: if reject_post_only {
+                FailedMultipleLimitOrderBehavior::RejectPostOnly
+            } else {
+                FailedMultipleLimitOrderBehavior::AmendOnCross
+            },
         }
     }
 
@@ -71,7 +121,7 @@ impl MultipleOrderPacket {
             bids,
             asks,
             client_order_id: None,
-            reject_post_only: true,
+            failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
         }
     }
 }
@@ -324,58 +374,28 @@ fn process_new_order<'a, 'info>(
         let clock = Clock::get()?;
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
-        let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
-
+        let market_wrapper = load_with_dispatch_mut(&market_info.size_params, market_bytes)?;
         // If the trader does not have sufficient funds to place the order, return silently without mutating the book.
         if order_packet.fail_silently_on_insufficient_funds() {
-            let (quote_lots_free, base_lots_free) = {
-                let trader_index = market
-                    .get_trader_index(trader.key)
-                    .ok_or(PhoenixError::TraderNotFound)?;
-                let trader_state = market.get_trader_state_from_index(trader_index);
-                (trader_state.quote_lots_free, trader_state.base_lots_free)
-            };
-            let (quote_lots_available, base_lots_available) = match vault_context.as_ref() {
-                None => (quote_lots_free, base_lots_free),
-                Some(ctx) => {
-                    let quote_account_atoms = ctx.quote_account.amount().map(QuoteAtoms::new)?;
-                    let base_account_atoms = ctx.base_account.amount().map(BaseAtoms::new)?;
-                    (
-                        quote_lots_free + quote_account_atoms.unchecked_div(quote_lot_size),
-                        base_lots_free + base_account_atoms.unchecked_div(base_lot_size),
-                    )
-                }
-            };
-            match side {
-                Side::Ask => {
-                    if base_lots_available < order_packet.num_base_lots() {
-                        phoenix_log!(
-                            "Insufficient funds to place order: {} base lots available, {} base lots required",
-                            base_lots_available,
-                            order_packet.num_base_lots()
-                        );
-                        return Ok(());
-                    }
-                }
-                Side::Bid => {
-                    let quote_lots_required = order_packet.get_price_in_ticks()
-                        * market.get_tick_size()
-                        * order_packet.num_base_lots()
-                        / market.get_base_lots_per_base_unit();
-
-                    if quote_lots_available < quote_lots_required {
-                        phoenix_log!(
-                            "Insufficient funds to place order: {} quote lots available, {} quote lots required",
-                            quote_lots_available,
-                            quote_lots_required
-                        );
-                        return Ok(());
-                    }
-                }
+            let (base_lots_available, quote_lots_available) = get_available_balances_for_trader(
+                &market_wrapper,
+                trader.key,
+                vault_context.as_ref(),
+                base_lot_size,
+                quote_lot_size,
+            )?;
+            if !order_packet_has_sufficient_funds(
+                &market_wrapper,
+                order_packet,
+                base_lots_available,
+                quote_lots_available,
+            ) {
+                return Ok(());
             }
         }
 
-        let (order_id, matching_engine_response) = market
+        let (order_id, matching_engine_response) = market_wrapper
+            .inner
             .place_order(
                 trader.key,
                 *order_packet,
@@ -486,7 +506,7 @@ fn process_multiple_new_orders<'a, 'info>(
         bids,
         asks,
         client_order_id,
-        reject_post_only,
+        failed_multiple_limit_order_behavior,
     } = multiple_order_packet;
     let client_order_id = client_order_id.unwrap_or(0);
     let mut quote_lots_to_deposit = QuoteLots::ZERO;
@@ -500,7 +520,29 @@ fn process_multiple_new_orders<'a, 'info>(
         let clock = Clock::get()?;
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
-        let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
+        let market_wrapper = load_with_dispatch_mut(&market_info.size_params, market_bytes)?;
+
+        let mut best_bid = market_wrapper.inner.get_top_of_book(
+            Side::Bid,
+            clock.slot,
+            clock.unix_timestamp as u64,
+        );
+
+        let mut best_ask = market_wrapper.inner.get_top_of_book(
+            Side::Ask,
+            clock.slot,
+            clock.unix_timestamp as u64,
+        );
+
+        let (mut base_lots_available, mut quote_lots_available) =
+            get_available_balances_for_trader(
+                &market_wrapper,
+                trader.key,
+                vault_context.as_ref(),
+                base_lot_size,
+                quote_lot_size,
+            )?;
+
         for (book_orders, side) in [(&bids, Side::Bid), (&asks, Side::Ask)].iter() {
             for CondensedOrder {
                 price_in_ticks,
@@ -535,15 +577,48 @@ fn process_multiple_new_orders<'a, 'info>(
                     price_in_ticks: Ticks::new(price_in_ticks),
                     num_base_lots: BaseLots::new(size_in_base_lots),
                     client_order_id,
-                    reject_post_only,
+                    reject_post_only: failed_multiple_limit_order_behavior
+                        .should_reject_post_only(),
                     use_only_deposited_funds: no_deposit,
                     last_valid_slot,
                     last_valid_unix_timestamp_in_seconds,
-                    fail_silently_on_insufficient_funds: false,
+                    fail_silently_on_insufficient_funds: failed_multiple_limit_order_behavior
+                        .should_check_for_insufficient_funds(),
                 };
 
                 let matching_engine_response = {
-                    let (order_id, matching_engine_response) = market
+                    if failed_multiple_limit_order_behavior.should_check_for_insufficient_funds()
+                        && !order_packet_has_sufficient_funds(
+                            &market_wrapper,
+                            &order_packet,
+                            base_lots_available,
+                            quote_lots_available,
+                        )
+                    {
+                        // Skip this order if the trader does not have sufficient funds
+                        continue;
+                    }
+                    if failed_multiple_limit_order_behavior.should_check_for_crossing_orders() {
+                        let price_in_ticks = order_packet.get_price_in_ticks();
+                        match side {
+                            Side::Bid => {
+                                if price_in_ticks >= best_ask {
+                                    // Skip this order if it crosses the spread
+                                    continue;
+                                }
+                                best_bid = best_bid.max(price_in_ticks);
+                            }
+                            Side::Ask => {
+                                if price_in_ticks <= best_bid {
+                                    // Skip this order if it crosses the spread
+                                    continue;
+                                }
+                                best_ask = best_ask.min(price_in_ticks);
+                            }
+                        }
+                    }
+                    let (order_id, matching_engine_response) = market_wrapper
+                        .inner
                         .place_order(trader.key, order_packet, record_event_fn, &mut get_clock_fn)
                         .ok_or(PhoenixError::NewOrderError)?;
                     if let Some(order_id) = order_id {
@@ -552,10 +627,22 @@ fn process_multiple_new_orders<'a, 'info>(
                     matching_engine_response
                 };
 
-                quote_lots_to_deposit +=
+                let quote_lots_deposited =
                     matching_engine_response.get_deposit_amount_bid_in_quote_lots();
-                base_lots_to_deposit +=
+                let base_lots_deposited =
                     matching_engine_response.get_deposit_amount_ask_in_base_lots();
+
+                if failed_multiple_limit_order_behavior.should_check_for_insufficient_funds() {
+                    // Decrement the available funds by the amount that was deposited after each iteration
+                    // This should never underflow, but if it does, the program will panic and the transaction will fail
+                    quote_lots_available -=
+                        quote_lots_deposited + matching_engine_response.num_free_quote_lots_used;
+                    base_lots_available -=
+                        base_lots_deposited + matching_engine_response.num_free_base_lots_used;
+                }
+
+                quote_lots_to_deposit += quote_lots_deposited;
+                base_lots_to_deposit += base_lots_deposited
             }
         }
     }
@@ -610,4 +697,71 @@ fn process_multiple_new_orders<'a, 'info>(
     }
 
     Ok(())
+}
+
+fn get_available_balances_for_trader<'a>(
+    market_wrapper: &MarketWrapperMut<'a, Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
+    trader: &Pubkey,
+    vault_context: Option<&PhoenixVaultContext>,
+    base_lot_size: BaseAtomsPerBaseLot,
+    quote_lot_size: QuoteAtomsPerQuoteLot,
+) -> Result<(BaseLots, QuoteLots), ProgramError> {
+    let (base_lots_free, quote_lots_free) = {
+        let trader_index = market_wrapper
+            .inner
+            .get_trader_index(trader)
+            .ok_or(PhoenixError::TraderNotFound)?;
+        let trader_state = market_wrapper
+            .inner
+            .get_trader_state_from_index(trader_index);
+        (trader_state.base_lots_free, trader_state.quote_lots_free)
+    };
+    let (base_lots_available, quote_lots_available) = match vault_context.as_ref() {
+        None => (base_lots_free, quote_lots_free),
+        Some(ctx) => {
+            let quote_account_atoms = ctx.quote_account.amount().map(QuoteAtoms::new)?;
+            let base_account_atoms = ctx.base_account.amount().map(BaseAtoms::new)?;
+            (
+                base_lots_free + base_account_atoms.unchecked_div(base_lot_size),
+                quote_lots_free + quote_account_atoms.unchecked_div(quote_lot_size),
+            )
+        }
+    };
+    Ok((base_lots_available, quote_lots_available))
+}
+
+fn order_packet_has_sufficient_funds<'a>(
+    market_wrapper: &MarketWrapperMut<'a, Pubkey, FIFOOrderId, FIFORestingOrder, OrderPacket>,
+    order_packet: &OrderPacket,
+    base_lots_available: BaseLots,
+    quote_lots_available: QuoteLots,
+) -> bool {
+    match order_packet.side() {
+        Side::Ask => {
+            if base_lots_available < order_packet.num_base_lots() {
+                phoenix_log!(
+                    "Insufficient funds to place order: {} base lots available, {} base lots required",
+                    base_lots_available,
+                    order_packet.num_base_lots()
+                );
+                return false;
+            }
+        }
+        Side::Bid => {
+            let quote_lots_required = order_packet.get_price_in_ticks()
+                * market_wrapper.inner.get_tick_size()
+                * order_packet.num_base_lots()
+                / market_wrapper.inner.get_base_lots_per_base_unit();
+
+            if quote_lots_available < quote_lots_required {
+                phoenix_log!(
+                    "Insufficient funds to place order: {} quote lots available, {} quote lots required",
+                    quote_lots_available,
+                    quote_lots_required
+                );
+                return false;
+            }
+        }
+    }
+    true
 }
