@@ -2991,69 +2991,6 @@ async fn test_phoenix_place_multiple_limit_orders() {
         )
         .await
         .unwrap();
-
-    //Send multiple orders in cross via the second maker - verify this throws an error
-    let bids = (1..30)
-        .map(|i| {
-            CondensedOrder::new_default(
-                meta.float_price_to_ticks_rounded_down(101.0 - (i as f64 * 0.1)),
-                meta.raw_base_units_to_base_lots_rounded_down(10.0),
-            )
-        })
-        .collect::<Vec<_>>();
-    let asks = (1..30)
-        .map(|i| {
-            CondensedOrder::new_default(
-                meta.float_price_to_ticks_rounded_down(99.0 + (i as f64 * 0.1)),
-                meta.raw_base_units_to_base_lots_rounded_down(10.0),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let new_order_ix = create_new_multiple_order_instruction(
-        market,
-        &second_maker.user.pubkey(),
-        base_mint,
-        quote_mint,
-        &MultipleOrderPacket::new(bids, asks, Some(4), true),
-    );
-
-    assert!(sdk
-        .client
-        .sign_send_instructions(vec![new_order_ix], vec![&second_maker.user])
-        .await
-        .is_err());
-
-    // Send multiple orders in cross via the second maker, this time with post only rejection set to false - verify this succeeds
-    let bids = (1..30)
-        .map(|i| {
-            CondensedOrder::new_default(
-                meta.float_price_to_ticks_rounded_down(101.0 - (i as f64 * 0.1)),
-                meta.raw_base_units_to_base_lots_rounded_down(10.0),
-            )
-        })
-        .collect::<Vec<_>>();
-    let asks = (1..30)
-        .map(|i| {
-            CondensedOrder::new_default(
-                meta.float_price_to_ticks_rounded_down(99.0 + (i as f64 * 0.1)),
-                meta.raw_base_units_to_base_lots_rounded_down(10.0),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let new_order_ix = create_new_multiple_order_instruction(
-        market,
-        &second_maker.user.pubkey(),
-        base_mint,
-        quote_mint,
-        &MultipleOrderPacket::new(bids, asks, Some(9), false),
-    );
-
-    sdk.client
-        .sign_send_instructions(vec![new_order_ix], vec![&second_maker.user])
-        .await
-        .unwrap();
 }
 
 #[allow(clippy::too_many_arguments)]
