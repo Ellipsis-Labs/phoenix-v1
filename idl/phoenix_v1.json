@@ -2368,6 +2368,10 @@
                 "type": {
                   "option": "u64"
                 }
+              },
+              {
+                "name": "fail_silently_on_insufficient_funds",
+                "type": "bool"
               }
             ]
           },
@@ -2419,6 +2423,10 @@
                 "type": {
                   "option": "u64"
                 }
+              },
+              {
+                "name": "fail_silently_on_insufficient_funds",
+                "type": "bool"
               }
             ]
           },
