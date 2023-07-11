@@ -3709,6 +3709,37 @@ async fn test_phoenix_place_order_quiet_failure() {
         "Order should have failed silently"
     );
 
+    // This order should fail
+    let params = OrderPacket::Limit {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(2_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    assert!(
+        sdk.client
+            .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+            .await
+            .is_err(),
+        "Order should have failed"
+    );
+
+    let market_end = sdk.get_market_orderbook(market).await.unwrap();
+    assert_eq!(
+        market_start.asks.len(),
+        market_end.asks.len(),
+        "Order count should be the same"
+    );
+
     println!("Cancelling all orders");
     sdk.client
         .sign_send_instructions(
@@ -3832,6 +3863,30 @@ async fn test_phoenix_place_order_quiet_failure() {
         .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
         .await
         .unwrap();
+
+    // This order should fail
+    let params = OrderPacket::Limit {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.0)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(2_f64)),
+        self_trade_behavior: SelfTradeBehavior::Abort,
+        match_limit: None,
+        client_order_id: 0,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let new_order_ix =
+        create_new_order_instruction(market, &maker.user.pubkey(), base_mint, quote_mint, &params);
+
+    assert!(
+        sdk.client
+            .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+            .await
+            .is_err(),
+        "Order should have failed"
+    );
 
     let market_end = sdk.get_market_orderbook(market).await.unwrap();
 

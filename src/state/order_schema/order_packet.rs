@@ -138,10 +138,6 @@ pub enum OrderPacket {
 
         /// If this is set, the order will be invalid after the specified unix timestamp
         last_valid_unix_timestamp_in_seconds: Option<u64>,
-
-        /// The PostOnly and Limit variants have a flag at this position to fail silently on insufficient funds. This
-        /// padding field is used to help with uniformly deserializing the enum.
-        _padding: u8,
     },
 }
 
@@ -497,7 +493,6 @@ impl OrderPacket {
             use_only_deposited_funds,
             last_valid_slot,
             last_valid_unix_timestamp_in_seconds,
-            _padding: 0,
         }
     }
 }
@@ -777,14 +772,14 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let num_stripped_bytes = if rng.gen::<f64>() > 0.5 { 1 } else { 3 };
-        let decoded_inferred =
-            decode_order_packet(&bytes[..bytes.len() - num_stripped_bytes]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 3]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 
     for _ in 0..num_iters {
@@ -832,14 +827,14 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let num_stripped_bytes = if rng.gen::<f64>() > 0.5 { 1 } else { 3 };
-        let decoded_inferred =
-            decode_order_packet(&bytes[..bytes.len() - num_stripped_bytes]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 3]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 
     for _ in 0..num_iters {
@@ -884,7 +879,6 @@ fn test_decode_order_packet() {
             use_only_deposited_funds,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
-            _padding: 0,
         };
         let deprecated_packet = DeprecatedOrderPacket::ImmediateOrCancel {
             side,
@@ -900,13 +894,13 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let num_stripped_bytes = if rng.gen::<f64>() > 0.5 { 1 } else { 3 };
-        let decoded_inferred =
-            decode_order_packet(&bytes[..bytes.len() - num_stripped_bytes]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 }
