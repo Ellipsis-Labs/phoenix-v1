@@ -328,15 +328,13 @@ fn process_new_order<'a, 'info>(
 
         // If the trader does not have sufficient funds to place the order, return silently without mutating the book.
         if order_packet.fail_silently_on_insufficient_funds() {
-            let trader_index = market
-                .get_trader_index(trader.key)
-                .ok_or(PhoenixError::TraderNotFound)?;
-            let quote_lots_free = market
-                .get_trader_state_from_index(trader_index)
-                .quote_lots_free;
-            let base_lots_free = market
-                .get_trader_state_from_index(trader_index)
-                .base_lots_free;
+            let (quote_lots_free, base_lots_free) = {
+                let trader_index = market
+                    .get_trader_index(trader.key)
+                    .ok_or(PhoenixError::TraderNotFound)?;
+                let trader_state = market.get_trader_state_from_index(trader_index);
+                (trader_state.quote_lots_free, trader_state.base_lots_free)
+            };
             let (quote_lots_available, base_lots_available) = match vault_context.as_ref() {
                 None => (quote_lots_free, base_lots_free),
                 Some(ctx) => {
@@ -352,7 +350,7 @@ fn process_new_order<'a, 'info>(
                 Side::Ask => {
                     if base_lots_available < order_packet.num_base_lots() {
                         phoenix_log!(
-                            "Insufficient funds to place order: {} base lots available, {} base lots requested",
+                            "Insufficient funds to place order: {} base lots available, {} base lots required",
                             base_lots_available,
                             order_packet.num_base_lots()
                         );
@@ -367,7 +365,7 @@ fn process_new_order<'a, 'info>(
 
                     if quote_lots_available < quote_lots_required {
                         phoenix_log!(
-                            "Insufficient funds to place order: {} quote lots available, {} quote lots requested",
+                            "Insufficient funds to place order: {} quote lots available, {} quote lots required",
                             quote_lots_available,
                             quote_lots_required
                         );

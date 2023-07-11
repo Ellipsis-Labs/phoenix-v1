@@ -674,13 +674,6 @@ impl OrderPacket {
 }
 
 pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
-    // The optional fields at the end of the order packet are not required in the raw input data.
-    let additional_fields = &[
-        0_u8, /* last_valid_slot */
-        0_u8, /* last_valid_unix_timestamp_in_seconds */
-        0_u8, /* fail_silently_on_insufficient_funds */
-    ];
-
     // First, attempt to decode the order packet with the raw input data.
     match OrderPacket::try_from_slice(bytes) {
         Ok(order_packet) => Some(order_packet),
@@ -692,6 +685,12 @@ pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
         // The requirement here is that the included optional fields must be contiguous in memory
         // (i.e. it is undefined behavior to include non-adjacent optional fields while excluding the ones in between)
         Err(_) => {
+            // The optional fields at the end of the order packet are not required in the raw input data.
+            let additional_fields = &[
+                0_u8, /* last_valid_slot */
+                0_u8, /* last_valid_unix_timestamp_in_seconds */
+                0_u8, /* fail_silently_on_insufficient_funds */
+            ];
             let mut padded_bytes = [bytes, additional_fields].concat();
             for _ in 0..additional_fields.len() {
                 if let Ok(order_packet) = OrderPacket::try_from_slice(&padded_bytes) {
