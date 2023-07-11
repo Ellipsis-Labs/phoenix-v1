@@ -523,21 +523,22 @@ fn process_multiple_new_orders<'a, 'info>(
         failed_multiple_limit_order_behavior,
     } = multiple_order_packet;
 
-    let highest_bid = bids
-        .iter()
-        .map(|bid| bid.price_in_ticks)
-        .max_by(|bid1, bid2| bid1.cmp(&bid2))
-        .unwrap_or(0);
+    if failed_multiple_limit_order_behavior.should_reject_post_only() {
+        let highest_bid = bids
+            .iter()
+            .map(|bid| bid.price_in_ticks)
+            .max_by(|bid1, bid2| bid1.cmp(&bid2))
+            .unwrap_or(0);
 
-    let lowest_ask = asks
-        .iter()
-        .map(|ask| ask.price_in_ticks)
-        .max_by(|ask1, ask2| ask2.cmp(&ask1))
-        .unwrap_or(u64::MAX);
-
-    if highest_bid >= lowest_ask {
-        phoenix_log!("Invalid input. MultipleOrderPacket contains crossing bids and asks");
-        return Err(ProgramError::InvalidArgument.into());
+        let lowest_ask = asks
+            .iter()
+            .map(|ask| ask.price_in_ticks)
+            .max_by(|ask1, ask2| ask2.cmp(&ask1))
+            .unwrap_or(u64::MAX);
+        if highest_bid >= lowest_ask {
+            phoenix_log!("Invalid input. MultipleOrderPacket contains crossing bids and asks");
+            return Err(ProgramError::InvalidArgument.into());
+        }
     }
 
     let client_order_id = client_order_id.unwrap_or(0);

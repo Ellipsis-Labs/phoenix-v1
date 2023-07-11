@@ -3913,11 +3913,12 @@ async fn test_phoenix_place_order_quiet_failure() {
     );
 }
 
+/// This tests that a user can place multiple orders that fail silently even if the user
+/// is out of funds.
 #[tokio::test]
 async fn test_phoenix_multiple_orders_fail_silently_basic() {
     let (mut client, phoenix_ctx) = bootstrap_default(0).await;
 
-    // 100 SOL, 1_000 USDC
     let maker = get_new_maker(&client, &phoenix_ctx, 99, 901).await;
     let PhoenixTestClient {
         sdk, market, meta, ..
@@ -3928,19 +3929,14 @@ async fn test_phoenix_multiple_orders_fail_silently_basic() {
 
     sdk.set_payer(clone_keypair(&maker.user));
 
-    let base_balance_start = get_token_balance(&sdk.client, maker.base_ata).await;
-    let quote_balance_start = get_token_balance(&sdk.client, maker.quote_ata).await;
-    println!("Base balance start: {}", base_balance_start);
-    println!("Quote balance start: {}", quote_balance_start);
-
     let deposit_ix = create_deposit_funds_instruction(
         market,
         &maker.user.pubkey(),
         &meta.base_mint,
         &meta.quote_mint,
         &DepositParams {
-            quote_lots_to_deposit: meta.quote_units_to_quote_lots(300.0),
-            base_lots_to_deposit: meta.raw_base_units_to_base_lots_rounded_down(30.0),
+            quote_lots_to_deposit: meta.quote_units_to_quote_lots(312.0),
+            base_lots_to_deposit: meta.raw_base_units_to_base_lots_rounded_down(39.0),
         },
     );
     sdk.client
@@ -4014,103 +4010,10 @@ async fn test_phoenix_multiple_orders_fail_silently_basic() {
 
     let market = sdk.get_market_orderbook(market).await.unwrap();
     assert_eq!(market.bids.len(), 9);
-    println!(
-        "Market asks: {:?}",
-        market.asks.iter().map(|x| x.0).collect::<Vec<_>>()
-    );
     assert_eq!(market.asks.len(), 9);
 }
 
-#[tokio::test]
-async fn test_phoenix_multiple_orders_fail_silently_crossing() {
-    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
-
-    // 100 SOL, 1_000 USDC
-    let maker = get_new_maker(&client, &phoenix_ctx, 99, 901).await;
-    let PhoenixTestClient {
-        sdk, market, meta, ..
-    } = &mut client;
-
-    let quote_mint = &meta.quote_mint;
-    let base_mint = &meta.base_mint;
-
-    sdk.set_payer(clone_keypair(&maker.user));
-
-    let base_balance_start = get_token_balance(&sdk.client, maker.base_ata).await;
-    let quote_balance_start = get_token_balance(&sdk.client, maker.quote_ata).await;
-    println!("Base balance start: {}", base_balance_start);
-    println!("Quote balance start: {}", quote_balance_start);
-
-    let mut bids = vec![];
-
-    for i in 0..10 {
-        bids.push(CondensedOrder {
-            price_in_ticks: meta.float_price_to_ticks_rounded_down(10.0 - 0.01 * i as f64),
-            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
-            last_valid_slot: None,
-            last_valid_unix_timestamp_in_seconds: None,
-        });
-    }
-
-    let mut asks = vec![];
-
-    for i in 0..10 {
-        asks.push(CondensedOrder {
-            price_in_ticks: meta.float_price_to_ticks_rounded_down(10.01 + 0.01 * i as f64),
-            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
-            last_valid_slot: None,
-            last_valid_unix_timestamp_in_seconds: None,
-        });
-    }
-
-    let order_packet = MultipleOrderPacket {
-        asks: asks.clone(),
-        bids: bids.clone(),
-        client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
-    };
-
-    let new_order_ix = create_new_multiple_order_instruction(
-        market,
-        &maker.user.pubkey(),
-        base_mint,
-        quote_mint,
-        &order_packet,
-    );
-
-    assert!(sdk
-        .client
-        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
-        .await
-        .is_err());
-
-    let order_packet = MultipleOrderPacket {
-        asks: asks.clone(),
-        bids: bids.clone(),
-        client_order_id: None,
-        failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders,
-    };
-
-    let new_order_ix = create_new_multiple_order_instruction(
-        market,
-        &maker.user.pubkey(),
-        base_mint,
-        quote_mint,
-        &order_packet,
-    );
-
-    assert!(sdk
-        .client
-        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
-        .await
-        .is_ok());
-
-    let market = sdk.get_market_orderbook(market).await.unwrap();
-    assert_eq!(market.bids.len(), 9);
-    assert_eq!(market.asks.len(), 9);
-}
-
+/// This tests that placing multiple orders will fail if the input orders cross
 #[tokio::test]
 async fn test_phoenix_multiple_orders_crossing_order_input() {
     let (mut client, phoenix_ctx) = bootstrap_default(0).await;
@@ -4165,4 +4068,316 @@ async fn test_phoenix_multiple_orders_crossing_order_input() {
         .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
         .await
         .is_err());
+}
+
+/// This tests that placing multiple orders will still succeed if one of the orders crosses the bid-ask spread
+#[tokio::test]
+async fn test_phoenix_multiple_orders_with_existing_book() {
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
+
+    let maker = get_new_maker(&client, &phoenix_ctx, 101, 1010).await;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
+
+    let quote_mint = &meta.quote_mint;
+    let base_mint = &meta.base_mint;
+
+    sdk.set_payer(clone_keypair(&maker.user));
+
+    // Create limit orders at 9.96 and 10.01
+    let bid_order_packet = OrderPacket::PostOnly {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(9.96)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        client_order_id: 0,
+        reject_post_only: true,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let bid_ix = create_new_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        &base_mint,
+        &quote_mint,
+        &bid_order_packet,
+    );
+
+    let ask_order_packet = OrderPacket::PostOnly {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.01)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        client_order_id: 0,
+        reject_post_only: true,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let ask_ix = create_new_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        &base_mint,
+        &quote_mint,
+        &ask_order_packet,
+    );
+
+    sdk.client
+        .sign_send_instructions(vec![bid_ix, ask_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let mut bids = vec![];
+
+    for i in 0..10 {
+        bids.push(CondensedOrder {
+            price_in_ticks: meta.float_price_to_ticks_rounded_down(10.01 - 0.01 * i as f64),
+            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        });
+    }
+
+    let mut asks = vec![];
+
+    for i in 0..10 {
+        asks.push(CondensedOrder {
+            price_in_ticks: meta.float_price_to_ticks_rounded_up(10.02 + 0.01 * i as f64),
+            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        });
+    }
+
+    let order_packet = MultipleOrderPacket {
+        asks: asks.clone(),
+        bids: bids.clone(),
+        client_order_id: None,
+        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+    };
+
+    let new_order_ix = create_new_multiple_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &order_packet,
+    );
+
+    assert!(sdk
+        .client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .is_err());
+
+    let order_packet = MultipleOrderPacket {
+        asks: asks.clone(),
+        bids: bids.clone(),
+        client_order_id: None,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders,
+    };
+
+    let new_order_ix = create_new_multiple_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &order_packet,
+    );
+
+    assert!(sdk
+        .client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .is_ok());
+
+    let market = sdk.get_market_orderbook(market).await.unwrap();
+    let market_bids = market
+        .bids
+        .iter()
+        .map(|(o, _)| o.price_in_ticks.into())
+        .collect::<Vec<_>>();
+    for bid in bids {
+        if bid.price_in_ticks >= 1001 {
+            assert!(!market_bids.contains(&bid.price_in_ticks));
+        } else {
+            assert!(market_bids.contains(&bid.price_in_ticks));
+        }
+    }
+    assert_eq!(market_bids.len(), 10);
+
+    let market_asks = market
+        .asks
+        .iter()
+        .map(|(o, _)| o.price_in_ticks.into())
+        .collect::<Vec<_>>();
+
+    for ask in asks {
+        println!("{:?}", ask);
+        assert!(market_asks.contains(&ask.price_in_ticks));
+    }
+    assert_eq!(market_asks.len(), 11);
+
+    assert_eq!(market_asks[0], 1001);
+    assert_eq!(market_bids[0], 1000);
+}
+
+/// This tests that placing multiple orders will still succeed if one of the orders crosses the bid-ask spread
+#[tokio::test]
+async fn test_phoenix_multiple_orders_with_existing_book_amend() {
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
+
+    let maker = get_new_maker(&client, &phoenix_ctx, 101, 1010).await;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
+
+    let quote_mint = &meta.quote_mint;
+    let base_mint = &meta.base_mint;
+
+    sdk.set_payer(clone_keypair(&maker.user));
+
+    // Create limit orders at 9.96 and 10.01
+    let bid_order_packet = OrderPacket::PostOnly {
+        side: Side::Bid,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(9.96)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        client_order_id: 0,
+        reject_post_only: true,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let bid_ix = create_new_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        &base_mint,
+        &quote_mint,
+        &bid_order_packet,
+    );
+
+    let ask_order_packet = OrderPacket::PostOnly {
+        side: Side::Ask,
+        price_in_ticks: Ticks::new(meta.float_price_to_ticks_rounded_down(10.01)),
+        num_base_lots: BaseLots::new(meta.raw_base_units_to_base_lots_rounded_down(1_f64)),
+        client_order_id: 0,
+        reject_post_only: true,
+        use_only_deposited_funds: false,
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+        fail_silently_on_insufficient_funds: false,
+    };
+    let ask_ix = create_new_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        &base_mint,
+        &quote_mint,
+        &ask_order_packet,
+    );
+
+    sdk.client
+        .sign_send_instructions(vec![bid_ix, ask_ix], vec![&maker.user])
+        .await
+        .unwrap();
+
+    let mut bids = vec![];
+
+    for i in 0..10 {
+        bids.push(CondensedOrder {
+            price_in_ticks: meta.float_price_to_ticks_rounded_down(10.01 - 0.01 * i as f64),
+            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        });
+    }
+
+    let mut asks = vec![];
+
+    for i in 0..10 {
+        asks.push(CondensedOrder {
+            price_in_ticks: meta.float_price_to_ticks_rounded_up(10.02 + 0.01 * i as f64),
+            size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+            last_valid_slot: None,
+            last_valid_unix_timestamp_in_seconds: None,
+        });
+    }
+
+    let order_packet = MultipleOrderPacket {
+        asks: asks.clone(),
+        bids: bids.clone(),
+        client_order_id: None,
+        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+    };
+
+    let new_order_ix = create_new_multiple_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &order_packet,
+    );
+
+    assert!(sdk
+        .client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .is_err());
+
+    let order_packet = MultipleOrderPacket {
+        asks: asks.clone(),
+        bids: bids.clone(),
+        client_order_id: None,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailSilentlyAndAmend,
+    };
+
+    let new_order_ix = create_new_multiple_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &order_packet,
+    );
+
+    assert!(sdk
+        .client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .is_ok());
+
+    let market = sdk.get_market_orderbook(market).await.unwrap();
+    let market_bids = market
+        .bids
+        .iter()
+        .map(|(o, _)| o.price_in_ticks.into())
+        .collect::<Vec<_>>();
+    for bid in bids {
+        if bid.price_in_ticks >= 1001 {
+            assert!(!market_bids.contains(&bid.price_in_ticks));
+        } else {
+            assert!(market_bids.contains(&bid.price_in_ticks));
+        }
+    }
+
+    assert_eq!(market_bids.len(), 11);
+    assert!(market_bids.iter().filter(|&x| *x == 1000).count() == 2);
+
+    let market_asks = market
+        .asks
+        .iter()
+        .map(|(o, _)| o.price_in_ticks.into())
+        .collect::<Vec<_>>();
+
+    for ask in asks {
+        println!("{:?}", ask);
+        assert!(market_asks.contains(&ask.price_in_ticks));
+    }
+    assert_eq!(market_asks.len(), 11);
+
+    assert_eq!(market_asks[0], 1001);
+    assert_eq!(market_bids[0], 1000);
 }
