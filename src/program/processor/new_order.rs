@@ -124,6 +124,20 @@ impl MultipleOrderPacket {
             failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
         }
     }
+
+    pub fn new_with_failure_behavior(
+        bids: Vec<CondensedOrder>,
+        asks: Vec<CondensedOrder>,
+        client_order_id: Option<u128>,
+        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior,
+    ) -> Self {
+        MultipleOrderPacket {
+            bids,
+            asks,
+            client_order_id,
+            failed_multiple_limit_order_behavior,
+        }
+    }
 }
 
 /// This function performs an IOC or FOK order against the specified market.
@@ -508,6 +522,24 @@ fn process_multiple_new_orders<'a, 'info>(
         client_order_id,
         failed_multiple_limit_order_behavior,
     } = multiple_order_packet;
+
+    let highest_bid = bids
+        .iter()
+        .map(|bid| bid.price_in_ticks)
+        .max_by(|bid1, bid2| bid1.cmp(&bid2))
+        .unwrap_or(0);
+
+    let lowest_ask = asks
+        .iter()
+        .map(|ask| ask.price_in_ticks)
+        .max_by(|ask1, ask2| ask2.cmp(&ask1))
+        .unwrap_or(u64::MAX);
+
+    if highest_bid >= lowest_ask {
+        phoenix_log!("Invalid input. MultipleOrderPacket contains crossing bids and asks");
+        return Err(ProgramError::InvalidArgument.into());
+    }
+
     let client_order_id = client_order_id.unwrap_or(0);
     let mut quote_lots_to_deposit = QuoteLots::ZERO;
     let mut base_lots_to_deposit = BaseLots::ZERO;
@@ -642,7 +674,7 @@ fn process_multiple_new_orders<'a, 'info>(
                 }
 
                 quote_lots_to_deposit += quote_lots_deposited;
-                base_lots_to_deposit += base_lots_deposited
+                base_lots_to_deposit += base_lots_deposited;
             }
         }
     }

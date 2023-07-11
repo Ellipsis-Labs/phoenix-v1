@@ -4054,17 +4054,7 @@ async fn test_phoenix_multiple_orders_fail_silently_crossing() {
 
     let mut asks = vec![];
 
-    println!("Layering asks");
     for i in 0..10 {
-        println!(
-            "Condensed order {:?}",
-            CondensedOrder {
-                price_in_ticks: meta.float_price_to_ticks_rounded_down(10.01 + 0.01 * i as f64),
-                size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
-                last_valid_slot: None,
-                last_valid_unix_timestamp_in_seconds: None,
-            }
-        );
         asks.push(CondensedOrder {
             price_in_ticks: meta.float_price_to_ticks_rounded_down(10.01 + 0.01 * i as f64),
             size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
@@ -4119,4 +4109,60 @@ async fn test_phoenix_multiple_orders_fail_silently_crossing() {
     let market = sdk.get_market_orderbook(market).await.unwrap();
     assert_eq!(market.bids.len(), 9);
     assert_eq!(market.asks.len(), 9);
+}
+
+#[tokio::test]
+async fn test_phoenix_multiple_orders_crossing_order_input() {
+    let (mut client, phoenix_ctx) = bootstrap_default(0).await;
+
+    // 100 SOL, 1_000 USDC
+    let maker = get_new_maker(&client, &phoenix_ctx, 10, 100).await;
+    let PhoenixTestClient {
+        sdk, market, meta, ..
+    } = &mut client;
+
+    let quote_mint = &meta.quote_mint;
+    let base_mint = &meta.base_mint;
+
+    sdk.set_payer(clone_keypair(&maker.user));
+
+    let base_balance_start = get_token_balance(&sdk.client, maker.base_ata).await;
+    let quote_balance_start = get_token_balance(&sdk.client, maker.quote_ata).await;
+    println!("Base balance start: {}", base_balance_start);
+    println!("Quote balance start: {}", quote_balance_start);
+
+    let bids = vec![CondensedOrder {
+        price_in_ticks: meta.float_price_to_ticks_rounded_down(10.0),
+        size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+    }];
+
+    let asks = vec![CondensedOrder {
+        price_in_ticks: meta.float_price_to_ticks_rounded_down(9.99),
+        size_in_base_lots: meta.raw_base_units_to_base_lots_rounded_down(10_f64),
+        last_valid_slot: None,
+        last_valid_unix_timestamp_in_seconds: None,
+    }];
+
+    let order_packet = MultipleOrderPacket {
+        asks: asks.clone(),
+        bids: bids.clone(),
+        client_order_id: None,
+        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+    };
+
+    let new_order_ix = create_new_multiple_order_instruction(
+        market,
+        &maker.user.pubkey(),
+        base_mint,
+        quote_mint,
+        &order_packet,
+    );
+
+    assert!(sdk
+        .client
+        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+        .await
+        .is_err());
 }
