@@ -29,41 +29,36 @@ use std::mem::size_of;
 pub enum FailedMultipleLimitOrderBehavior {
     /// Orders will never cross the spread. Instead they will be amended to the closest non-crossing price.
     /// The entire transaction will fail if matching engine returns None for any order, which indicates an error.
-    AmendOnCross,
+    ///
+    /// If an order has insufficient funds, the entire transaction will fail.
+    FailOnInsufficientFundsAndAmendOnCross,
 
-    /// If any order crosses the spread, the entire transaction will fail.
-    RejectPostOnly,
+    /// If any order crosses the spread or has insufficient funds, the entire transaction will fail.
+    FailOnInsufficientFundsAndFailOnCross,
 
     /// Orders will be skipped if the user has insufficient funds.
     /// Crossing orders will be amended to the closest non-crossing price.
-    FailSilentlyAndAmend,
+    SkipOnInsufficientFundsAndAmendOnCross,
 
     /// Orders will be skipped if the user has insufficient funds.
     /// Crossing orders will be skipped.
-    FailSilentlyAndRejectCrossingOrders,
+    SkipOnInsufficientFundsAndFailOnCross,
 }
 
 impl FailedMultipleLimitOrderBehavior {
-    pub fn should_reject_post_only(&self) -> bool {
+    pub fn should_fail_on_cross(&self) -> bool {
         matches!(
             self,
-            FailedMultipleLimitOrderBehavior::RejectPostOnly
-                | FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross
+                | FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndFailOnCross
         )
     }
 
-    pub fn should_check_for_insufficient_funds(&self) -> bool {
+    pub fn should_skip_orders_with_insufficient_funds(&self) -> bool {
         matches!(
             self,
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndAmend
-                | FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
-        )
-    }
-
-    pub fn should_check_for_crossing_orders(&self) -> bool {
-        matches!(
-            self,
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndAmendOnCross
+                | FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndFailOnCross
         )
     }
 }
@@ -109,9 +104,9 @@ impl MultipleOrderPacket {
             asks,
             client_order_id,
             failed_multiple_limit_order_behavior: if reject_post_only {
-                FailedMultipleLimitOrderBehavior::RejectPostOnly
+                FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross
             } else {
-                FailedMultipleLimitOrderBehavior::AmendOnCross
+                FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndAmendOnCross
             },
         }
     }
@@ -121,7 +116,8 @@ impl MultipleOrderPacket {
             bids,
             asks,
             client_order_id: None,
-            failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+            failed_multiple_limit_order_behavior:
+                FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
         }
     }
 
@@ -389,7 +385,8 @@ fn process_new_order<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market_wrapper = load_with_dispatch_mut(&market_info.size_params, market_bytes)?;
-        // If the trader does not have sufficient funds to place the order, return silently without mutating the book.
+        // If the order should fail silently on insufficient funds, and the trader does not have sufficient funds for the order,
+        // return silently without modifying the book.
         if order_packet.fail_silently_on_insufficient_funds() {
             let (base_lots_available, quote_lots_available) = get_available_balances_for_trader(
                 &market_wrapper,
@@ -532,8 +529,9 @@ fn process_multiple_new_orders<'a, 'info>(
     let lowest_ask = asks
         .iter()
         .map(|ask| ask.price_in_ticks)
-        .max_by(|ask1, ask2| ask2.cmp(&ask1))
+        .min_by(|ask1, ask2| ask1.cmp(&ask2))
         .unwrap_or(u64::MAX);
+
     if highest_bid >= lowest_ask {
         phoenix_log!("Invalid input. MultipleOrderPacket contains crossing bids and asks");
         return Err(ProgramError::InvalidArgument.into());
@@ -552,18 +550,6 @@ fn process_multiple_new_orders<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market_wrapper = load_with_dispatch_mut(&market_info.size_params, market_bytes)?;
-
-        let mut best_bid = market_wrapper.inner.get_top_of_book(
-            Side::Bid,
-            clock.slot,
-            clock.unix_timestamp as u64,
-        );
-
-        let mut best_ask = market_wrapper.inner.get_top_of_book(
-            Side::Ask,
-            clock.slot,
-            clock.unix_timestamp as u64,
-        );
 
         let (mut base_lots_available, mut quote_lots_available) =
             get_available_balances_for_trader(
@@ -608,17 +594,17 @@ fn process_multiple_new_orders<'a, 'info>(
                     price_in_ticks: Ticks::new(price_in_ticks),
                     num_base_lots: BaseLots::new(size_in_base_lots),
                     client_order_id,
-                    reject_post_only: failed_multiple_limit_order_behavior
-                        .should_reject_post_only(),
+                    reject_post_only: failed_multiple_limit_order_behavior.should_fail_on_cross(),
                     use_only_deposited_funds: no_deposit,
                     last_valid_slot,
                     last_valid_unix_timestamp_in_seconds,
                     fail_silently_on_insufficient_funds: failed_multiple_limit_order_behavior
-                        .should_check_for_insufficient_funds(),
+                        .should_skip_orders_with_insufficient_funds(),
                 };
 
                 let matching_engine_response = {
-                    if failed_multiple_limit_order_behavior.should_check_for_insufficient_funds()
+                    if failed_multiple_limit_order_behavior
+                        .should_skip_orders_with_insufficient_funds()
                         && !order_packet_has_sufficient_funds(
                             &market_wrapper,
                             &order_packet,
@@ -628,25 +614,6 @@ fn process_multiple_new_orders<'a, 'info>(
                     {
                         // Skip this order if the trader does not have sufficient funds
                         continue;
-                    }
-                    if failed_multiple_limit_order_behavior.should_check_for_crossing_orders() {
-                        let price_in_ticks = order_packet.get_price_in_ticks();
-                        match side {
-                            Side::Bid => {
-                                if price_in_ticks >= best_ask {
-                                    // Skip this order if it crosses the spread
-                                    continue;
-                                }
-                                best_bid = best_bid.max(price_in_ticks);
-                            }
-                            Side::Ask => {
-                                if price_in_ticks <= best_bid {
-                                    // Skip this order if it crosses the spread
-                                    continue;
-                                }
-                                best_ask = best_ask.min(price_in_ticks);
-                            }
-                        }
                     }
                     let (order_id, matching_engine_response) = market_wrapper
                         .inner
@@ -663,7 +630,8 @@ fn process_multiple_new_orders<'a, 'info>(
                 let base_lots_deposited =
                     matching_engine_response.get_deposit_amount_ask_in_base_lots();
 
-                if failed_multiple_limit_order_behavior.should_check_for_insufficient_funds() {
+                if failed_multiple_limit_order_behavior.should_skip_orders_with_insufficient_funds()
+                {
                     // Decrement the available funds by the amount that was deposited after each iteration
                     // This should never underflow, but if it does, the program will panic and the transaction will fail
                     quote_lots_available -=

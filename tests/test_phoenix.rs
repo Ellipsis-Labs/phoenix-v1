@@ -3906,7 +3906,8 @@ async fn test_phoenix_multiple_orders_fail_silently_basic() {
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -3928,7 +3929,7 @@ async fn test_phoenix_multiple_orders_fail_silently_basic() {
         bids: bids.clone(),
         client_order_id: None,
         failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders,
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -3989,7 +3990,8 @@ async fn test_phoenix_multiple_orders_crossing_order_input() {
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4092,7 +4094,8 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_bid
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4114,7 +4117,7 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_bid
         bids: bids.clone(),
         client_order_id: None,
         failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders,
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4125,41 +4128,13 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_bid
         &order_packet,
     );
 
-    assert!(sdk
-        .client
-        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
-        .await
-        .is_ok());
-
-    let market = sdk.get_market_orderbook(market).await.unwrap();
-    let market_bids = market
-        .bids
-        .iter()
-        .map(|(o, _)| o.price_in_ticks.into())
-        .collect::<Vec<_>>();
-    for bid in bids {
-        if bid.price_in_ticks >= 1001 {
-            assert!(!market_bids.contains(&bid.price_in_ticks));
-        } else {
-            assert!(market_bids.contains(&bid.price_in_ticks));
-        }
-    }
-    assert_eq!(market_bids.len(), 10);
-
-    let market_asks = market
-        .asks
-        .iter()
-        .map(|(o, _)| o.price_in_ticks.into())
-        .collect::<Vec<_>>();
-
-    for ask in asks {
-        println!("{:?}", ask);
-        assert!(market_asks.contains(&ask.price_in_ticks));
-    }
-    assert_eq!(market_asks.len(), 11);
-
-    assert_eq!(market_asks[0], 1001);
-    assert_eq!(market_bids[0], 1000);
+    assert!(
+        sdk.client
+            .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+            .await
+            .is_err(),
+        "Order should fail on cross"
+    );
 }
 
 /// This tests that placing multiple orders will still succeed if one of the orders crosses the bid-ask spread
@@ -4247,7 +4222,8 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_amend_bid() {
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4269,7 +4245,7 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_amend_bid() {
         bids: bids.clone(),
         client_order_id: None,
         failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndAmend,
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndAmendOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4404,7 +4380,8 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_ask
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4426,7 +4403,7 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_ask
         bids: bids.clone(),
         client_order_id: None,
         failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndRejectCrossingOrders,
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4437,40 +4414,13 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_ignore_crossing_ask
         &order_packet,
     );
 
-    assert!(sdk
-        .client
-        .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
-        .await
-        .is_ok());
-
-    let market = sdk.get_market_orderbook(market).await.unwrap();
-    let market_bids = market
-        .bids
-        .iter()
-        .map(|(o, _)| o.price_in_ticks.into())
-        .collect::<Vec<_>>();
-    for bid in bids {
-        assert!(market_bids.contains(&bid.price_in_ticks));
-    }
-    assert_eq!(market_bids.len(), 11);
-
-    let market_asks = market
-        .asks
-        .iter()
-        .map(|(o, _)| o.price_in_ticks.into())
-        .collect::<Vec<_>>();
-
-    for ask in asks {
-        if ask.price_in_ticks <= 996 {
-            assert!(!market_asks.contains(&ask.price_in_ticks));
-        } else {
-            assert!(market_asks.contains(&ask.price_in_ticks));
-        }
-    }
-    assert_eq!(market_asks.len(), 9);
-
-    assert_eq!(market_asks[0], 997);
-    assert_eq!(market_bids[0], 996);
+    assert!(
+        sdk.client
+            .sign_send_instructions(vec![new_order_ix], vec![&maker.user])
+            .await
+            .is_err(),
+        "Order should fail on cross"
+    );
 }
 
 /// This tests that placing multiple orders will still succeed if one of the orders crosses the bid-ask spread
@@ -4560,7 +4510,8 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_amend_ask() {
         asks: asks.clone(),
         bids: bids.clone(),
         client_order_id: None,
-        failed_multiple_limit_order_behavior: FailedMultipleLimitOrderBehavior::RejectPostOnly,
+        failed_multiple_limit_order_behavior:
+            FailedMultipleLimitOrderBehavior::FailOnInsufficientFundsAndFailOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(
@@ -4582,7 +4533,7 @@ async fn test_phoenix_multiple_orders_crossing_existing_book_amend_ask() {
         bids: bids.clone(),
         client_order_id: None,
         failed_multiple_limit_order_behavior:
-            FailedMultipleLimitOrderBehavior::FailSilentlyAndAmend,
+            FailedMultipleLimitOrderBehavior::SkipOnInsufficientFundsAndAmendOnCross,
     };
 
     let new_order_ix = create_new_multiple_order_instruction(

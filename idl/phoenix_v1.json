@@ -2266,16 +2266,16 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "AmendOnCross"
+            "name": "FailOnInsufficientFundsAndAmendOnCross"
           },
           {
-            "name": "RejectPostOnly"
+            "name": "FailOnInsufficientFundsAndFailOnCross"
           },
           {
-            "name": "FailSilentlyAndAmend"
+            "name": "SkipOnInsufficientFundsAndAmendOnCross"
           },
           {
-            "name": "FailSilentlyAndRejectCrossingOrders"
+            "name": "SkipOnInsufficientFundsAndFailOnCross"
           }
         ]
       }
