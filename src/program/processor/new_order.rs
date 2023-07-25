@@ -41,7 +41,7 @@ pub enum FailedMultipleLimitOrderBehavior {
     SkipOnInsufficientFundsAndAmendOnCross,
 
     /// Orders will be skipped if the user has insufficient funds.
-    /// Crossing orders will be skipped.
+    /// If any order crosses the spread, the entire transaction will fail.
     SkipOnInsufficientFundsAndFailOnCross,
 }
 
@@ -385,8 +385,9 @@ fn process_new_order<'a, 'info>(
         let mut get_clock_fn = || (clock.slot, clock.unix_timestamp as u64);
         let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
         let market_wrapper = load_with_dispatch_mut(&market_info.size_params, market_bytes)?;
-        // If the order should fail silently on insufficient funds, and the trader does not have sufficient funds for the order,
-        // return silently without modifying the book.
+
+        // If the order should fail silently on insufficient funds, and the trader does not have
+        // sufficient funds for the order, return silently without modifying the book.
         if order_packet.fail_silently_on_insufficient_funds() {
             let (base_lots_available, quote_lots_available) = get_available_balances_for_trader(
                 &market_wrapper,
