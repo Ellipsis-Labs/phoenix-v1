@@ -98,6 +98,7 @@ impl<'a, 'info> TokenAccountInfo<'a, 'info> {
 }
 
 impl<'a, 'info> TokenAccountInfo<'a, 'info> {
+    /// Function copied from https://github.com/coral-xyz/anchor/blob/master/spl/src/token.rs#L534
     pub fn amount(&self) -> Result<u64, ProgramError> {
         let bytes = self.info.try_borrow_data()?;
         let mut amount_bytes = [0u8; 8];
