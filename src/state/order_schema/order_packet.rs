@@ -47,6 +47,9 @@ pub enum OrderPacket {
 
         /// If this is set, the order will be invalid after the specified unix timestamp
         last_valid_unix_timestamp_in_seconds: Option<u64>,
+
+        /// If this is set, the order will fail silently if there are insufficient funds
+        fail_silently_on_insufficient_funds: bool,
     },
 
     /// This order type is used to place a limit order on the book
@@ -80,6 +83,9 @@ pub enum OrderPacket {
 
         /// If this is set, the order will be invalid after the specified unix timestamp
         last_valid_unix_timestamp_in_seconds: Option<u64>,
+
+        /// If this is set, the order will fail silently if there are insufficient funds
+        fail_silently_on_insufficient_funds: bool,
     },
 
     /// This order type is used to place an order that will be matched against existing resting orders
@@ -189,6 +195,7 @@ impl OrderPacket {
             use_only_deposited_funds: false,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         }
     }
 
@@ -207,6 +214,7 @@ impl OrderPacket {
             use_only_deposited_funds: false,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         }
     }
 
@@ -225,6 +233,7 @@ impl OrderPacket {
             use_only_deposited_funds: false,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         }
     }
 
@@ -245,6 +254,7 @@ impl OrderPacket {
             use_only_deposited_funds,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         }
     }
 
@@ -296,6 +306,7 @@ impl OrderPacket {
             use_only_deposited_funds,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         }
     }
 
@@ -495,6 +506,20 @@ impl OrderPacket {
         }
     }
 
+    pub fn fail_silently_on_insufficient_funds(&self) -> bool {
+        match self {
+            Self::PostOnly {
+                fail_silently_on_insufficient_funds,
+                ..
+            } => *fail_silently_on_insufficient_funds,
+            Self::Limit {
+                fail_silently_on_insufficient_funds,
+                ..
+            } => *fail_silently_on_insufficient_funds,
+            Self::ImmediateOrCancel { .. } => false,
+        }
+    }
+
     pub fn client_order_id(&self) -> u128 {
         match self {
             Self::PostOnly {
@@ -644,26 +669,33 @@ impl OrderPacket {
 }
 
 pub fn decode_order_packet(bytes: &[u8]) -> Option<OrderPacket> {
-    let order_packet = match OrderPacket::try_from_slice(bytes) {
-        Ok(order_packet) => order_packet,
+    // First, attempt to decode the order packet with the raw input data.
+    match OrderPacket::try_from_slice(bytes) {
+        Ok(order_packet) => Some(order_packet),
+        // If the initial deserialization fails, the strategy is to decode the order packet with the
+        // starting assumption that none of the optional fields are present.
+        //
+        // The original input data is padded with all of the optional fields at the end.
+        // Each field is then removed one at a time in order until the order packet successfully decodes.
+        // The requirement here is that the included optional fields must be contiguous in memory
+        // (i.e. it is undefined behavior to include non-adjacent optional fields while excluding the ones in between)
         Err(_) => {
-            // Options with a None value are encoded with a 0 byte.
-            // If the input data is missing the `last_valid_slot` and `last_valid_unix_timestamp_in_seconds`
-            // fields on the order packet, this function infers these parameters to be None and tries
-            // to decode the order packet again.
-            let padded_bytes = [bytes, &[0_u8, 0_u8]].concat();
-            let order_packet = OrderPacket::try_from_slice(&padded_bytes).ok()?;
-            if order_packet.get_last_valid_slot().is_some()
-                || order_packet
-                    .get_last_valid_unix_timestamp_in_seconds()
-                    .is_some()
-            {
-                return None;
+            // The optional fields at the end of the order packet are not required in the raw input data.
+            let additional_fields = &[
+                0_u8, /* last_valid_slot */
+                0_u8, /* last_valid_unix_timestamp_in_seconds */
+                0_u8, /* fail_silently_on_insufficient_funds */
+            ];
+            let mut padded_bytes = [bytes, additional_fields].concat();
+            for _ in 0..additional_fields.len() {
+                if let Ok(order_packet) = OrderPacket::try_from_slice(&padded_bytes) {
+                    return Some(order_packet);
+                }
+                padded_bytes.pop();
             }
-            order_packet
+            None
         }
-    };
-    Some(order_packet)
+    }
 }
 
 #[test]
@@ -728,6 +760,7 @@ fn test_decode_order_packet() {
             use_only_deposited_funds,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         };
         let deprecated_packet = DeprecatedOrderPacket::PostOnly {
             side,
@@ -739,12 +772,14 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 3]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 
     for _ in 0..num_iters {
@@ -779,6 +814,7 @@ fn test_decode_order_packet() {
             use_only_deposited_funds,
             last_valid_slot: None,
             last_valid_unix_timestamp_in_seconds: None,
+            fail_silently_on_insufficient_funds: false,
         };
         let deprecated_packet = DeprecatedOrderPacket::Limit {
             side,
@@ -791,12 +827,14 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 3]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 
     for _ in 0..num_iters {
@@ -856,11 +894,13 @@ fn test_decode_order_packet() {
         };
         let bytes = packet.try_to_vec().unwrap();
         let decoded_normal = decode_order_packet(&bytes).unwrap();
-        let decoded_inferred = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let decoded_inferred_1 = decode_order_packet(&bytes[..bytes.len() - 2]).unwrap();
+        let decoded_inferred_2 = decode_order_packet(&bytes[..bytes.len() - 1]).unwrap();
         let deprecated_bytes = deprecated_packet.try_to_vec().unwrap();
         let decoded_deprecated = decode_order_packet(&deprecated_bytes).unwrap();
         assert_eq!(packet, decoded_normal);
-        assert_eq!(decoded_normal, decoded_inferred);
-        assert_eq!(decoded_inferred, decoded_deprecated);
+        assert_eq!(decoded_normal, decoded_inferred_1);
+        assert_eq!(decoded_inferred_1, decoded_deprecated);
+        assert_eq!(decoded_inferred_1, decoded_inferred_2);
     }
 }

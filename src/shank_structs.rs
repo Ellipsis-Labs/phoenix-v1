@@ -42,6 +42,7 @@ enum OrderPacket {
         use_only_deposited_funds: bool,
         last_valid_slot: Option<u64>,
         last_valid_unix_timestamp_in_seconds: Option<u64>,
+        fail_silently_on_insufficient_funds: bool,
     },
     Limit {
         side: Side,
@@ -53,6 +54,7 @@ enum OrderPacket {
         use_only_deposited_funds: bool,
         last_valid_slot: Option<u64>,
         last_valid_unix_timestamp_in_seconds: Option<u64>,
+        fail_silently_on_insufficient_funds: bool,
     },
     ImmediateOrCancel {
         side: Side,

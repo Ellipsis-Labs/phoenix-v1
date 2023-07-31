@@ -97,6 +97,16 @@ impl<'a, 'info> TokenAccountInfo<'a, 'info> {
     }
 }
 
+impl<'a, 'info> TokenAccountInfo<'a, 'info> {
+    /// Function copied from https://github.com/coral-xyz/anchor/blob/master/spl/src/token.rs#L534
+    pub fn amount(&self) -> Result<u64, ProgramError> {
+        let bytes = self.info.try_borrow_data()?;
+        let mut amount_bytes = [0u8; 8];
+        amount_bytes.copy_from_slice(&bytes[64..72]);
+        Ok(u64::from_le_bytes(amount_bytes))
+    }
+}
+
 impl<'a, 'info> AsRef<AccountInfo<'info>> for TokenAccountInfo<'a, 'info> {
     fn as_ref(&self) -> &AccountInfo<'info> {
         self.info

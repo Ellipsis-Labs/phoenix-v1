@@ -1,5 +1,5 @@
 {
-  "version": "0.2.3",
+  "version": "0.2.4",
   "name": "phoenix_v1",
   "instructions": [
     {
@@ -1984,8 +1984,10 @@
             }
           },
           {
-            "name": "rejectPostOnly",
-            "type": "bool"
+            "name": "failedMultipleLimitOrderBehavior",
+            "type": {
+              "defined": "FailedMultipleLimitOrderBehavior"
+            }
           }
         ]
       }
@@ -2259,6 +2261,26 @@
       }
     },
     {
+      "name": "FailedMultipleLimitOrderBehavior",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "FailOnInsufficientFundsAndAmendOnCross"
+          },
+          {
+            "name": "FailOnInsufficientFundsAndFailOnCross"
+          },
+          {
+            "name": "SkipOnInsufficientFundsAndAmendOnCross"
+          },
+          {
+            "name": "SkipOnInsufficientFundsAndFailOnCross"
+          }
+        ]
+      }
+    },
+    {
       "name": "MarketStatus",
       "type": {
         "kind": "enum",
@@ -2346,6 +2368,10 @@
                 "type": {
                   "option": "u64"
                 }
+              },
+              {
+                "name": "fail_silently_on_insufficient_funds",
+                "type": "bool"
               }
             ]
           },
@@ -2397,6 +2423,10 @@
                 "type": {
                   "option": "u64"
                 }
+              },
+              {
+                "name": "fail_silently_on_insufficient_funds",
+                "type": "bool"
               }
             ]
           },
