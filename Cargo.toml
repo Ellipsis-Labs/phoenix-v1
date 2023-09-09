@@ -1,6 +1,6 @@
 [package]
 name = "phoenix-common"
-version = "0.2.4"
+version = "0.2.0"
 edition = "2021"
 resolver = "2"
 repository = "https://github.com/Ellipsis-Labs/phoenix-v1"

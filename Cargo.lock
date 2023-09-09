@@ -1236,7 +1236,7 @@ checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "phoenix-common"
-version = "0.2.4"
+version = "0.2.0"
 dependencies = [
  "borsh 0.9.3",
  "bytemuck",
