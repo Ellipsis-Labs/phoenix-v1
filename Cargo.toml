@@ -1,6 +1,6 @@
 [package]
 name = "phoenix-common"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 resolver = "2"
 repository = "https://github.com/Ellipsis-Labs/phoenix-v1"
@@ -28,7 +28,7 @@ overflow-checks = true
 [dependencies]
 shank = "0.0.12"
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "1.1.1", features = [ "no-entrypoint" ] } 
+spl-associated-token-account = { version = "2.2.0", features = [ "no-entrypoint" ] } 
 solana-program = "1.16.3"
 borsh = "0.9.3"
 bytemuck = "1.13.0"
