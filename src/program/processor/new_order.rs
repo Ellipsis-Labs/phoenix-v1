@@ -569,7 +569,10 @@ fn process_multiple_new_orders<'a, 'info>(
                 last_valid_unix_timestamp_in_seconds,
             } in book_orders
                 .iter()
-                .sorted_by(|o1, o2| o1.price_in_ticks.cmp(&o2.price_in_ticks))
+                .sorted_by(|o1, o2| match side {
+                    Side::Bid => o2.price_in_ticks.cmp(&o1.price_in_ticks),
+                    Side::Ask => o1.price_in_ticks.cmp(&o2.price_in_ticks),
+                })
                 .group_by(|o| {
                     (
                         o.price_in_ticks,
