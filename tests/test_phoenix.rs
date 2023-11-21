@@ -1,6 +1,7 @@
 use borsh::BorshSerialize;
 use ellipsis_client::program_test::*;
 use ellipsis_client::EllipsisClient;
+use itertools::Itertools;
 use phoenix::phoenix_log_authority;
 use phoenix::program::deposit::DepositParams;
 use phoenix::program::instruction_builders::*;
@@ -3947,6 +3948,37 @@ async fn test_phoenix_multiple_orders_fail_silently_basic() {
         .is_ok());
 
     let market = sdk.get_market_orderbook(market).await.unwrap();
+
+    // Unflip the bits of the bid order_sequence_numbers to get the true order of placement
+    let bid_sequence_numbers = market
+        .bids
+        .iter()
+        .sorted_by(|a, b| a.0.price_in_ticks.cmp(&b.0.price_in_ticks))
+        .map(|order| !order.0.order_sequence_number)
+        .collect::<Vec<u64>>();
+
+    assert!(
+        bid_sequence_numbers
+            .iter()
+            .zip(bid_sequence_numbers.iter().skip(1))
+            .all(|(a, b)| a > b),
+        "Bids with higher prices should have lower sequence numbers"
+    );
+
+    let ask_sequence_numbers = market
+        .asks
+        .iter()
+        .sorted_by(|a, b| a.0.price_in_ticks.cmp(&b.0.price_in_ticks))
+        .map(|order| order.0.order_sequence_number)
+        .collect::<Vec<u64>>();
+
+    assert!(
+        ask_sequence_numbers
+            .iter()
+            .zip(ask_sequence_numbers.iter().skip(1))
+            .all(|(a, b)| a < b),
+        "Asks with lower prices should have lower sequence numbers"
+    );
     assert_eq!(market.bids.len(), 9);
     assert_eq!(market.asks.len(), 9);
 }
