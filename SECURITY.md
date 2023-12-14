@@ -26,7 +26,7 @@ The bug bounty program is administered by Ellipsis Labs and OtterSec. All bug bo
           <li>Vulnerabilities that lead to protocol insolvency</li>
         </ul>
       </td>
-      <td>Up to $100,000</td>
+      <td>Up to $200,000</td>
     </tr>
     <tr>
       <td>High</td>
