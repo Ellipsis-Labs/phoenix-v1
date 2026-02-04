@@ -1,6 +1,6 @@
 # phoenix
 
-Phoenix is an on-chain orderbook that operates without a crank.
+Phoenix Legacy is an on-chain orderbook that operates without a crank.
 
 ### Documentation
 
@@ -8,15 +8,15 @@ Documentation and instructions on how to interact with the program are available
 
 ### Licensing
 
-The primary license for Phoenix is the Business Source License 1.1 (`BUSL-1.1`), which can be found at [`LICENSE`](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/LICENSE).
+The primary license for Phoenix Legacy is the Business Source License 1.1 (`BUSL-1.1`), which can be found at [`LICENSE`](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/LICENSE).
 
 ### Audits
 
-Phoenix has been audited by OtterSec. The audit report can be found at [audits/OtterSec.pdf](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/audits/OtterSec.pdf).
+Phoenix Legacy has been audited by OtterSec. The audit report can be found at [audits/OtterSec.pdf](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/audits/OtterSec.pdf).
 
 ### Bug Bounty
 
-Information on the bug bounty program for Phoenix can be found at [SECURITY.md](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/SECURITY.md).
+Information on the bug bounty program for Phoenix Legacy can be found at [SECURITY.md](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/SECURITY.md).
 
 ### Build Verification
 
@@ -41,4 +41,3 @@ To run the tests, run:
 ```
 ./test.sh
 ```
-

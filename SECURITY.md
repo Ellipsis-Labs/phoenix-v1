@@ -1,8 +1,8 @@
-# Phoenix Bug Bounty Program
+# Phoenix Legacy Bug Bounty Program
 
 ## Bug Bounty Overview
 
-This bug bounty program is specifically for [Phoenix](https://github.com/Ellipsis-Labs/phoenix-v1)’s smart contract code and [Sokoban](https://github.com/Ellipsis-Labs/sokoban/blob/master/src/red_black_tree.rs)’s red-black tree implementation. All relevant code is open source.
+This bug bounty program is specifically for [Phoenix Legacy](https://github.com/Ellipsis-Labs/phoenix-v1)’s smart contract code and [Sokoban](https://github.com/Ellipsis-Labs/sokoban/blob/master/src/red_black_tree.rs)’s red-black tree implementation. All relevant code is open source.
 
 Our bug bounty security guidelines are based on [Immunefi’s vulnerability severity classification system](https://immunefi.com/immunefi-vulnerability-severity-classification-system-v2-2/), and are subject to change at any time.
 
