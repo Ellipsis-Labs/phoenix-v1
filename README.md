@@ -8,7 +8,7 @@ Documentation and instructions on how to interact with the program are available
 
 ### Licensing
 
-The primary license for Phoenix Legacy is the Business Source License 1.1 (`BUSL-1.1`), which can be found at [`LICENSE`](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/LICENSE).
+The primary license for Phoenix Legacy is the MIT License (`MIT`), which can be found at [`LICENSE`](https://github.com/Ellipsis-Labs/phoenix-v1/blob/master/LICENSE).
 
 ### Audits
 
