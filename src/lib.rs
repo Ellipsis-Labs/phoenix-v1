@@ -20,7 +20,7 @@ pub mod quantities;
 mod shank_structs;
 pub mod state;
 
-use crate::program::processor::*;
+use crate::program::{checkers::phoenix_checkers::SeatAccountInfo, processor::*};
 
 use borsh::BorshSerialize;
 // You need to import Pubkey prior to using the declare_id macro
@@ -122,6 +122,10 @@ pub fn process_instruction(
             "Invalid log authority",
         )?;
         return Ok(());
+    }
+
+    if let PhoenixInstruction::DeleteSeat = instruction {
+        return delete_seat_account(accounts);
     }
 
     let (program_accounts, accounts) = accounts.split_at(4);
@@ -368,5 +372,49 @@ pub fn process_instruction(
     if !order_ids.is_empty() {
         set_return_data(order_ids.try_to_vec()?.as_ref());
     }
+    Ok(())
+}
+
+fn delete_seat_account(accounts: &[AccountInfo]) -> ProgramResult {
+    let market = next_account_info(&mut accounts.iter())?;
+    let seat = SeatAccountInfo::new(next_account_info(&mut accounts.iter())?, market.key)?;
+    let funding_key = next_account_info(&mut accounts.iter())?;
+
+    if market.data_is_empty() && *market.owner == solana_program::system_program::id() {
+        phoenix_log!("Market is empty, reclaiming seat's lamports");
+    } else {
+        // There are other cases that fall into this category.
+        // All of those cases involve user misconfiguation, so we return an error out of caution.
+        phoenix_log!("Market is not empty, cannot reclaim seat's lamports");
+        return Err(ProgramError::IllegalOwner);
+    }
+
+    let (trader, payer) = {
+        let seat = seat.load_mut()?;
+        (seat.trader, seat.funding_key)
+    };
+
+    if payer == Pubkey::default() {
+        phoenix_log!("Seat's lamports will be reclaimed to the trader");
+        assert_with_msg(
+            trader == *funding_key.key,
+            ProgramError::InvalidAccountData,
+            "Funding key mismatch",
+        )?;
+    } else {
+        phoenix_log!("Seat's lamports will be reclaimed to the funder");
+        assert_with_msg(
+            payer == *funding_key.key,
+            ProgramError::InvalidAccountData,
+            "Funding key mismatch",
+        )?;
+    }
+
+    let destination_starting_lamports = funding_key.lamports();
+    **funding_key.lamports.borrow_mut() = destination_starting_lamports + seat.lamports();
+    **seat.lamports.borrow_mut() = 0;
+    seat.assign(&solana_program::system_program::id());
+    seat.realloc(0, false)?;
+    phoenix_log!("Seat has been removed");
     Ok(())
 }
