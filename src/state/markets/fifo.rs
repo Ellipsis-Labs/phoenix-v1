@@ -672,52 +672,74 @@ impl<
     }
 
     /// This function determines whether a PostOnly order crosses the book.
-    /// If the order crosses the book, the function returns the price of the best unexpired order
-    /// on the opposite side of the book in Ticks. Otherwise, it returns None.
-    fn check_for_cross(
-        &mut self,
-        side: Side,
-        num_ticks: Ticks,
-        current_slot: u64,
-        current_unix_timestamp_in_seconds: u64,
-        record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
-    ) -> Option<Ticks> {
-        loop {
-            let book_entry = self.get_book_mut(side.opposite()).get_min();
-            if let Some((o_id, order)) = book_entry {
+        /// If the order crosses the book, the function returns the price of the best unexpired order
+        /// on the opposite side of the book in Ticks. Otherwise, it returns None.
+        /// This is a READ-ONLY function - it does not modify state or emit events.
+        fn check_for_cross(
+            &self,
+            side: Side,
+            num_ticks: Ticks,
+            current_slot: u64,
+            current_unix_timestamp_in_seconds: u64,
+        ) -> Option<Ticks> {
+            let book = self.get_book(side.opposite());
+            if let Some((o_id, order)) = book.get_min() {
                 let crosses = match side.opposite() {
                     Side::Bid => o_id.price_in_ticks >= num_ticks,
                     Side::Ask => o_id.price_in_ticks <= num_ticks,
                 };
-                if !crosses {
-                    break;
-                } else if order.num_base_lots > BaseLots::ZERO {
-                    if order.is_expired(current_slot, current_unix_timestamp_in_seconds) {
-                        self.reduce_order_inner(
-                            order.trader_index as u32,
-                            &o_id,
-                            side.opposite(),
-                            None,
-                            true,
-                            false,
-                            record_event_fn,
-                        )?;
-                    } else {
-                        return Some(o_id.price_in_ticks);
+                if crosses {
+                    if order.num_base_lots > BaseLots::ZERO {
+                        if order.is_expired(current_slot, current_unix_timestamp_in_seconds) {
+                            // Expired but still on book - this crosses but we don't auto-cancel here
+                            // Expired order cleanup should happen via explicit instruction
+                            return Some(o_id.price_in_ticks);
+                        } else {
+                            return Some(o_id.price_in_ticks);
+                        }
                     }
-                } else {
-                    // If the order is empty, we can remove it from the tree
-                    // This case should never occur in v1
-                    phoenix_log!("WARNING: Empty order found in check_for_cross");
-                    self.get_book_mut(side.opposite()).remove(&o_id);
                 }
-            } else {
-                // Book is empty
-                break;
             }
+            None
         }
-        None
-    }
+
+        /// Clean up expired orders from the book. Should be called periodically or via instruction.
+        /// Returns the number of expired orders removed.
+        pub fn cleanup_expired_orders(
+            &mut self,
+            current_slot: u64,
+            current_unix_timestamp_in_seconds: u64,
+            record_event_fn: &mut dyn FnMut(MarketEvent<MarketTraderId>),
+        ) -> usize {
+            let mut removed = 0;
+            for side in [Side::Bid, Side::Ask] {
+                let mut to_remove = Vec::new();
+                for (o_id, order) in self.get_book(side).iter() {
+                    if order.num_base_lots > BaseLots::ZERO
+                        && order.is_expired(current_slot, current_unix_timestamp_in_seconds)
+                    {
+                        to_remove.push((side, o_id, order.trader_index as u32));
+                    }
+                }
+                for (side, o_id, trader_index) in to_remove {
+                    if self
+                        .reduce_order_inner(
+                            trader_index,
+                            &o_id,
+                            side,
+                            None,
+                            true,  // order_is_expired
+                            false, // claim_funds
+                            record_event_fn,
+                        )
+                        .is_some()
+                    {
+                        removed += 1;
+                    }
+                }
+            }
+            removed
+        }
 
     #[inline(always)]
     fn claim_funds_inner(
