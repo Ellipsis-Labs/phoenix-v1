@@ -67,17 +67,6 @@ function mutateIdl() {
       });
     }
     if (
-      instruction.name === "CancelMulitpleOrdersById" ||
-      instruction.name === "CancelMulitpleOrdersByIdWithFreeFunds"
-    ) {
-      instruction.args.push({
-        name: "params",
-        type: {
-          defined: "CancelMulitpleOrdersByIdParams",
-        },
-      });
-    }
-    if (
       instruction.name === "PlaceLimitOrder" ||
       instruction.name === "PlaceLimitOrderWithFreeFunds" ||
       instruction.name === "Swap" ||
