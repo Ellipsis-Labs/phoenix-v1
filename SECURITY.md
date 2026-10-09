@@ -67,7 +67,7 @@ Bugs in `phoenix-sdk` and other code outside of the smart contract will be asses
 
 ## Report Submission
 
-Please email maintainers@ellipsislabs.xyz with a detailed description of the attack vector. For high- and critical-severity reports, please include a proof of concept on a deployed fork of the relevant programs. We will reach back out within 24 hours with additional questions or next steps on the bug bounty.
+Please submit your report to bounty.phoenix.trade with a detailed description of the attack vector. We will reach back out within 24 hours with additional questions or next steps on the bug bounty.
 
 ## Scope
 
