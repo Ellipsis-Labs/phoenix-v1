@@ -89,7 +89,7 @@ fn _create_seat<'a, 'info>(
     )?;
     let mut seat_bytes = seat.try_borrow_mut_data()?;
     *Seat::load_mut_bytes(&mut seat_bytes).ok_or(ProgramError::InvalidAccountData)? =
-        Seat::new_init(*market_key, *trader)?;
+        Seat::new_init(*market_key, *trader, *payer.key)?;
     Ok(())
 }
 

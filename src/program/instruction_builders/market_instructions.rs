@@ -651,3 +651,19 @@ pub fn create_request_seat_instruction(payer: &Pubkey, market: &Pubkey) -> Instr
         data: PhoenixInstruction::RequestSeat.to_vec(),
     }
 }
+
+pub fn create_delete_seat_instruction(
+    market: &Pubkey,
+    seat: &Pubkey,
+    funding_key: &Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: crate::id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*market, false),
+            AccountMeta::new(*seat, false),
+            AccountMeta::new(*funding_key, false),
+        ],
+        data: PhoenixInstruction::DeleteSeat.to_vec(),
+    }
+}

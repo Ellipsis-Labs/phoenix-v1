@@ -273,6 +273,11 @@ pub enum PhoenixInstruction {
     #[account(3, signer, name = "market_authority", desc = "The market_authority account must sign to change the free recipient")]
     #[account(4, name = "new_fee_recipient", desc = "New fee recipient")]
     ChangeFeeRecipient = 109,
+
+    #[account(0, name = "market", desc = "This account holds the market state")]
+    #[account(1, writable, name = "seat", desc = "The seat account to change the funding key")]
+    #[account(2, writable, name = "funding_key", desc = "The new funding key")]
+    DeleteSeat = 110,
 }
 
 impl PhoenixInstruction {
@@ -283,7 +288,7 @@ impl PhoenixInstruction {
 
 #[test]
 fn test_instruction_serialization() {
-    for i in 0..=108 {
+    for i in 0..=110 {
         let instruction = match PhoenixInstruction::try_from(i) {
             Ok(j) => j,
             Err(_) => {
