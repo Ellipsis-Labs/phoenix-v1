@@ -83,6 +83,14 @@ pub(crate) fn process_change_fee_recipient<'a, 'info>(
             ProgramError::MissingRequiredSignature,
             "Previous fee recipient must sign if there are uncollected fees",
         )?;
+        // Force collect fees before changing recipient to prevent bypass
+        let market_bytes = &mut market_info.try_borrow_mut_data()?[size_of::<MarketHeader>()..];
+        let market = load_with_dispatch_mut(&market_info.size_params, market_bytes)?.inner;
+        let fees_collected = market.collect_fees(&mut |_| {}); // No events during recipient change
+        phoenix_log!(
+            "Force-collected {} fees before recipient change",
+            fees_collected
+        );
     }
     header.fee_recipient = *new_fee_recipient.key;
     Ok(())
