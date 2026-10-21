@@ -326,7 +326,7 @@ pub(crate) fn process_place_multiple_post_only_orders<'a, 'info>(
     )
 }
 
-/// This function plcaces multiple Post-Only orders against the specified market
+/// This function places multiple Post-Only orders against the specified market
 /// using only the funds already available to the trader.
 /// Only users with sufficient funds and a "seat" on the market are authorized
 /// to perform this action.
